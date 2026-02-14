@@ -4,9 +4,12 @@ import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C } from '@/constants/theme';
+import { CoachBubble } from '@/components/coach-bubble';
 
 export default function TabLayout() {
   return (
+    <View style={{ flex: 1, backgroundColor: C.bgPrimary }}>
+    <CoachBubble />
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -26,13 +29,13 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={ts.tabItem}>
+            <View style={tabStyles.tabItem}>
               <Ionicons
                 name={focused ? "home" : "home-outline"}
                 size={22}
                 color={focused ? C.brandFire : C.textMuted}
               />
-              {focused && <View style={ts.activeDot} />}
+              {focused && <View style={tabStyles.activeDot} />}
             </View>
           ),
         }}
@@ -41,13 +44,13 @@ export default function TabLayout() {
         name="pools"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={ts.tabItem}>
+            <View style={tabStyles.tabItem}>
               <Ionicons
                 name={focused ? "people" : "people-outline"}
                 size={22}
                 color={focused ? C.brandFire : C.textMuted}
               />
-              {focused && <View style={ts.activeDot} />}
+              {focused && <View style={tabStyles.activeDot} />}
             </View>
           ),
         }}
@@ -56,10 +59,10 @@ export default function TabLayout() {
         name="prove"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={ts.proveContainer}>
+            <View style={tabStyles.proveContainer}>
               <LinearGradient
                 colors={[C.brandFire, C.brandGold]}
-                style={ts.proveBtn}
+                style={tabStyles.proveBtn}
               >
                 <Ionicons name="camera" size={26} color={C.white} />
               </LinearGradient>
@@ -71,13 +74,13 @@ export default function TabLayout() {
         name="stats"
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={ts.tabItem}>
+            <View style={tabStyles.tabItem}>
               <Ionicons
                 name={focused ? "bar-chart" : "bar-chart-outline"}
                 size={22}
                 color={focused ? C.brandFire : C.textMuted}
               />
-              {focused && <View style={ts.activeDot} />}
+              {focused && <View style={tabStyles.activeDot} />}
             </View>
           ),
         }}
@@ -85,10 +88,11 @@ export default function TabLayout() {
       {/* Hide explore from tabs */}
       <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
+    </View>
   );
 }
 
-const ts = StyleSheet.create({
+const tabStyles = StyleSheet.create({
   tabItem: { alignItems: 'center', justifyContent: 'center', gap: 4 },
   activeDot: {
     width: 4,
