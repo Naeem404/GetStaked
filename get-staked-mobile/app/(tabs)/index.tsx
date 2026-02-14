@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,15 +6,10 @@ import { C, Spacing, Radius, Fonts } from "@/constants/theme";
 import { StreakCounter } from "@/components/streak-counter";
 import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
 import { router } from "expo-router";
-
-const STREAK = 12;
-const BEST = 21;
-
-const activePools = [
-  { id: "1", emoji: "🏃", name: "Morning Run", streak: 5, total: 7, stake: "0.5 SOL", needsProof: true },
-  { id: "2", emoji: "📚", name: "Read 30 Pages", streak: 12, total: 14, stake: "0.5 SOL", needsProof: false },
-  { id: "3", emoji: "💪", name: "Gym Session", streak: 3, total: 7, stake: "0.5 SOL", needsProof: false },
-];
+import { useAuth } from "@/lib/auth-context";
+import { useMyPools } from "@/hooks/use-pools";
+import { useUserStats } from "@/hooks/use-stats";
+import { useHabitGrid } from "@/hooks/use-stats";
 
 function ProgressDots({ current, total }: { current: number; total: number }) {
   return (
@@ -30,31 +25,38 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 }
 
 export default function DashboardScreen() {
+  const { profile, signOut } = useAuth();
+  const { pools: myPools, loading: poolsLoading } = useMyPools();
+  const { stats, loading: statsLoading } = useUserStats();
+  const { days: habitDays } = useHabitGrid(28);
+
+  const solBalance = profile?.sol_balance ?? 0;
+
   return (
     <SafeAreaView style={d.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={d.scroll}>
         {/* Top bar */}
         <View style={d.topBar}>
           <Text style={d.brandName}>GET STAKED</Text>
-          <View style={d.walletPill}>
+          <Pressable onPress={() => signOut()} style={d.walletPill}>
             <LinearGradient
               colors={[C.brandFire, C.brandGold]}
               style={d.walletDot}
             />
-            <Text style={d.walletText}>2.45 SOL</Text>
-          </View>
+            <Text style={d.walletText}>{solBalance.toFixed(2)} SOL</Text>
+          </Pressable>
         </View>
 
         {/* Streak Hero */}
         <View style={d.streakHero}>
-          <StreakCounter days={STREAK} size="xl" />
+          <StreakCounter days={stats.currentStreak} size="xl" />
           <Text style={d.streakLabel}>day streak</Text>
-          <Text style={d.streakBest}>Best: {BEST} days</Text>
+          <Text style={d.streakBest}>Best: {stats.bestStreak} days</Text>
         </View>
 
         {/* Mini Habit Grid */}
         <View style={d.gridSection}>
-          <HabitGrid variant="compact" />
+          <HabitGrid variant="compact" data={habitDays} />
           <HabitGridLegend />
           <Pressable onPress={() => router.push("/stats")} style={d.gridLink}>
             <Text style={d.gridLinkText}>View full history →</Text>
@@ -66,33 +68,59 @@ export default function DashboardScreen() {
           <View style={d.poolsHeader}>
             <Text style={d.poolsTitle}>Active</Text>
             <View style={d.poolsBadge}>
-              <Text style={d.poolsBadgeText}>{activePools.length}</Text>
+              <Text style={d.poolsBadgeText}>{myPools.length}</Text>
             </View>
           </View>
 
-          {activePools.map((pool) => (
-            <Pressable
-              key={pool.id}
-              style={({ pressed }) => [
-                d.poolCard,
-                pool.needsProof && d.poolCardUrgent,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              {pool.needsProof && <View style={d.urgentDot} />}
-              <View style={d.poolRow}>
-                <Text style={d.poolEmoji}>{pool.emoji}</Text>
-                <View style={d.poolInfo}>
-                  <Text style={d.poolName}>{pool.name}</Text>
-                  <Text style={d.poolStake}>{pool.stake} staked</Text>
-                </View>
-                <StreakCounter days={pool.streak} size="sm" />
-              </View>
-              <View style={d.poolProgress}>
-                <ProgressDots current={pool.streak} total={pool.total} />
-              </View>
-            </Pressable>
-          ))}
+          {poolsLoading ? (
+            <ActivityIndicator color={C.brandFire} style={{ marginTop: 20 }} />
+          ) : myPools.length === 0 ? (
+            <View style={d.emptyState}>
+              <Text style={d.emptyTitle}>No active stakes</Text>
+              <Text style={d.emptyDesc}>Put your SOL where your mouth is</Text>
+              <Pressable onPress={() => router.push("/pools")}>
+                <LinearGradient
+                  colors={[C.brandFire, C.brandGold]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={d.emptyBtn}
+                >
+                  <Text style={d.emptyBtnText}>Browse Pools</Text>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          ) : (
+            myPools.map((pool) => {
+              const membership = pool.my_membership;
+              const streak = membership?.current_streak ?? 0;
+              const today = new Date().toISOString().split('T')[0];
+              const needsProof = membership?.last_proof_date !== today && pool.status === 'active';
+
+              return (
+                <Pressable
+                  key={pool.id}
+                  style={({ pressed }) => [
+                    d.poolCard,
+                    needsProof && d.poolCardUrgent,
+                    pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                  ]}
+                >
+                  {needsProof && <View style={d.urgentDot} />}
+                  <View style={d.poolRow}>
+                    <Text style={d.poolEmoji}>{pool.emoji || '🎯'}</Text>
+                    <View style={d.poolInfo}>
+                      <Text style={d.poolName}>{pool.name}</Text>
+                      <Text style={d.poolStake}>{pool.stake_amount} SOL staked</Text>
+                    </View>
+                    <StreakCounter days={streak} size="sm" />
+                  </View>
+                  <View style={d.poolProgress}>
+                    <ProgressDots current={membership?.days_completed ?? 0} total={pool.duration_days} />
+                  </View>
+                </Pressable>
+              );
+            })
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -165,4 +193,14 @@ const d = StyleSheet.create({
   poolProgress: { marginTop: 12 },
   dotsRow: { flexDirection: "row", gap: 4 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  emptyState: { alignItems: "center", paddingVertical: 32 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: C.textPrimary, marginBottom: 6 },
+  emptyDesc: { fontSize: 14, color: C.textSecondary, marginBottom: 20 },
+  emptyBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: Radius.md,
+    alignItems: "center",
+  },
+  emptyBtnText: { fontSize: 15, fontWeight: "700", color: C.white },
 });

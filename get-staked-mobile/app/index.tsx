@@ -1,9 +1,11 @@
-import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius } from "@/constants/theme";
+import { useAuth } from "@/lib/auth-context";
+import { useEffect } from "react";
 
 const steps = [
   { icon: "shield-checkmark" as const, title: "STAKE", desc: "Join a pool & stake SOL on your habit" },
@@ -12,6 +14,22 @@ const steps = [
 ];
 
 export default function LandingPage() {
+  const { session, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && session) {
+      router.replace("/(tabs)");
+    }
+  }, [session, loading]);
+
+  if (loading) {
+    return (
+      <View style={[s.safe, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={C.brandFire} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -27,7 +45,7 @@ export default function LandingPage() {
             Winners split the pot.
           </Text>
 
-          <Pressable onPress={() => router.replace("/(tabs)")}>
+          <Pressable onPress={() => router.push("/auth")}>
             <LinearGradient
               colors={[C.brandFire, C.brandGold]}
               start={{ x: 0, y: 0 }}

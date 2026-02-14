@@ -1,25 +1,47 @@
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius, Fonts } from "@/constants/theme";
 import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
+import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
+import { useRecentActivity } from "@/hooks/use-proofs";
 
-const stats = [
-  { label: "Current Streak", value: "12", icon: "flame" as const, color: C.brandFire },
-  { label: "Best Streak", value: "21", icon: "trophy" as const, color: C.brandGold },
-  { label: "Total Days", value: "87", icon: "calendar" as const, color: C.info },
-  { label: "Completion", value: "91%", icon: "checkmark-circle" as const, color: C.success },
-];
+function formatTimeAgo(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays}d ago`;
+}
 
-const recentActivity = [
-  { date: "Today", action: "Morning Run proof submitted", status: "verified", emoji: "✅" },
-  { date: "Yesterday", action: "Read 30 Pages verified", status: "verified", emoji: "✅" },
-  { date: "2 days ago", action: "Gym Session missed", status: "missed", emoji: "❌" },
-  { date: "3 days ago", action: "Morning Run proof submitted", status: "verified", emoji: "✅" },
-  { date: "3 days ago", action: "Read 30 Pages verified", status: "verified", emoji: "✅" },
-];
+function getActivityEmoji(action: string): string {
+  if (action.includes('verified') || action.includes('proof')) return '✅';
+  if (action.includes('failed') || action.includes('missed')) return '❌';
+  if (action.includes('joined')) return '🤝';
+  if (action.includes('created')) return '🎯';
+  if (action.includes('won')) return '🏆';
+  return '📋';
+}
 
 export default function StatsScreen() {
+  const { stats, loading: statsLoading } = useUserStats();
+  const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
+  const { activity, loading: activityLoading } = useRecentActivity(10);
+
+  const statCards = [
+    { label: "Current Streak", value: String(stats.currentStreak), icon: "flame" as const, color: C.brandFire },
+    { label: "Best Streak", value: String(stats.bestStreak), icon: "trophy" as const, color: C.brandGold },
+    { label: "Total Days", value: String(stats.totalDays), icon: "calendar" as const, color: C.info },
+    { label: "Completion", value: `${stats.completionRate}%`, icon: "checkmark-circle" as const, color: C.success },
+  ];
+
   return (
     <SafeAreaView style={st.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
@@ -27,22 +49,32 @@ export default function StatsScreen() {
         <Text style={st.title}>Your Stats</Text>
 
         {/* Stats Grid */}
-        <View style={st.statsGrid}>
-          {stats.map((stat) => (
-            <View key={stat.label} style={st.statCard}>
-              <Ionicons name={stat.icon} size={20} color={stat.color} />
-              <Text style={[st.statValue, { color: stat.color }]}>{stat.value}</Text>
-              <Text style={st.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
+        {statsLoading ? (
+          <ActivityIndicator color={C.brandFire} style={{ marginVertical: 20 }} />
+        ) : (
+          <View style={st.statsGrid}>
+            {statCards.map((stat) => (
+              <View key={stat.label} style={st.statCard}>
+                <Ionicons name={stat.icon} size={20} color={stat.color} />
+                <Text style={[st.statValue, { color: stat.color }]}>{stat.value}</Text>
+                <Text style={st.statLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Full Habit Grid */}
         <View style={st.gridSection}>
           <Text style={st.sectionTitle}>Activity</Text>
           <View style={st.gridCard}>
-            <HabitGrid variant="full" />
-            <HabitGridLegend />
+            {gridLoading ? (
+              <ActivityIndicator color={C.brandFire} />
+            ) : (
+              <>
+                <HabitGrid variant="full" data={habitDays} />
+                <HabitGridLegend />
+              </>
+            )}
           </View>
         </View>
 
@@ -54,7 +86,11 @@ export default function StatsScreen() {
               <Ionicons name="bulb" size={20} color={C.brandGold} />
             </View>
             <Text style={st.insightText}>
-              You're most consistent on Tuesdays and Wednesdays. Your weakest day is Sunday — consider adjusting your schedule.
+              {stats.winRate > 70
+                ? `Strong win rate at ${stats.winRate}%! You're earning ${stats.totalSolEarned.toFixed(2)} SOL total.`
+                : stats.currentStreak > 0
+                ? `You're on a ${stats.currentStreak}-day streak. Keep it going to maximize your winnings!`
+                : 'Start a streak by submitting your first proof today!'}
             </Text>
           </View>
         </View>
@@ -62,15 +98,21 @@ export default function StatsScreen() {
         {/* Recent Activity */}
         <View style={st.activitySection}>
           <Text style={st.sectionTitle}>Recent</Text>
-          {recentActivity.map((item, i) => (
-            <View key={i} style={st.activityRow}>
-              <Text style={st.activityEmoji}>{item.emoji}</Text>
-              <View style={st.activityInfo}>
-                <Text style={st.activityAction}>{item.action}</Text>
-                <Text style={st.activityDate}>{item.date}</Text>
+          {activityLoading ? (
+            <ActivityIndicator color={C.brandFire} />
+          ) : activity.length === 0 ? (
+            <Text style={st.noActivity}>No activity yet. Join a pool to get started!</Text>
+          ) : (
+            activity.map((item) => (
+              <View key={item.id} style={st.activityRow}>
+                <Text style={st.activityEmoji}>{getActivityEmoji(item.action)}</Text>
+                <View style={st.activityInfo}>
+                  <Text style={st.activityAction}>{item.description || item.action}</Text>
+                  <Text style={st.activityDate}>{formatTimeAgo(item.created_at)}</Text>
+                </View>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -168,4 +210,5 @@ const st = StyleSheet.create({
   activityInfo: { flex: 1 },
   activityAction: { fontSize: 13, color: C.textPrimary },
   activityDate: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  noActivity: { fontSize: 14, color: C.textMuted, textAlign: "center", paddingVertical: 16, paddingHorizontal: Spacing.xl },
 });

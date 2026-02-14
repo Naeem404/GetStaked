@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,25 +10,87 @@ import Animated, {
   withSpring,
   withSequence,
 } from "react-native-reanimated";
-
-const pendingProofs = [
-  { id: "1", emoji: "🏃", name: "Morning Run", deadline: "2h left", urgent: true },
-  { id: "2", emoji: "📚", name: "Read 30 Pages", deadline: "8h left", urgent: false },
-];
+import { usePendingProofs, submitProof } from "@/hooks/use-proofs";
+import { useAuth } from "@/lib/auth-context";
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProveScreen() {
-  const [selectedPool, setSelectedPool] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { pendingProofs, loading: proofsLoading, refetch } = usePendingProofs();
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const btnScale = useSharedValue(1);
 
   const btnAnim = useAnimatedStyle(() => ({
     transform: [{ scale: btnScale.value }],
   }));
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
     btnScale.value = withSequence(
       withSpring(0.9, { damping: 4 }),
       withSpring(1, { damping: 6 })
     );
+
+    // Try camera first, fall back to image picker
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status === 'granted') {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          quality: 0.8,
+          allowsEditing: true,
+          aspect: [4, 3],
+        });
+        if (!result.canceled && result.assets[0]) {
+          setImageUri(result.assets[0].uri);
+        }
+      } else {
+        // Fallback to gallery
+        handleGallery();
+      }
+    } catch {
+      handleGallery();
+    }
+  };
+
+  const handleGallery = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (!result.canceled && result.assets[0]) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!user || !selectedPoolId || !selectedMemberId || !imageUri) {
+      Alert.alert("Error", "Please select a pool and take a photo first");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error } = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri);
+      if (error) {
+        Alert.alert("Error", error.message);
+      } else {
+        Alert.alert("Verified! ✅", "Your proof has been submitted and verified.", [
+          { text: "Nice!", onPress: () => {
+            setImageUri(null);
+            setSelectedPoolId(null);
+            setSelectedMemberId(null);
+            refetch();
+          }},
+        ]);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -41,43 +103,61 @@ export default function ProveScreen() {
         {/* Pending proofs list */}
         <View style={pv.pendingSection}>
           <Text style={pv.sectionLabel}>PENDING</Text>
-          {pendingProofs.map((proof) => (
-            <Pressable
-              key={proof.id}
-              onPress={() => setSelectedPool(proof.id)}
-              style={[
-                pv.proofCard,
-                selectedPool === proof.id && pv.proofCardSelected,
-              ]}
-            >
-              <Text style={pv.proofEmoji}>{proof.emoji}</Text>
-              <View style={pv.proofInfo}>
-                <Text style={pv.proofName}>{proof.name}</Text>
-                <Text style={[pv.proofDeadline, proof.urgent && { color: C.danger }]}>
-                  {proof.deadline}
-                </Text>
-              </View>
-              {selectedPool === proof.id && (
-                <Ionicons name="checkmark-circle" size={22} color={C.brandFire} />
-              )}
-              {proof.urgent && selectedPool !== proof.id && (
-                <View style={pv.urgentDot} />
-              )}
-            </Pressable>
-          ))}
+          {proofsLoading ? (
+            <ActivityIndicator color={C.brandFire} />
+          ) : pendingProofs.length === 0 ? (
+            <Text style={pv.noPending}>All caught up! No proofs needed today.</Text>
+          ) : (
+            pendingProofs.map((proof) => (
+              <Pressable
+                key={proof.pool_id}
+                onPress={() => {
+                  setSelectedPoolId(proof.pool_id);
+                  setSelectedMemberId(proof.member_id);
+                }}
+                style={[
+                  pv.proofCard,
+                  selectedPoolId === proof.pool_id && pv.proofCardSelected,
+                ]}
+              >
+                <Text style={pv.proofEmoji}>{proof.pool_emoji}</Text>
+                <View style={pv.proofInfo}>
+                  <Text style={pv.proofName}>{proof.pool_name}</Text>
+                  <Text style={[pv.proofDeadline, proof.urgent && { color: C.danger }]}>
+                    {proof.deadline}
+                  </Text>
+                </View>
+                {selectedPoolId === proof.pool_id && (
+                  <Ionicons name="checkmark-circle" size={22} color={C.brandFire} />
+                )}
+                {proof.urgent && selectedPoolId !== proof.pool_id && (
+                  <View style={pv.urgentDot} />
+                )}
+              </Pressable>
+            ))
+          )}
         </View>
 
         {/* Camera area */}
         <View style={pv.cameraArea}>
-          <View style={pv.cameraPlaceholder}>
-            <Ionicons name="image-outline" size={48} color={C.textMuted} />
-            <Text style={pv.cameraText}>Photo preview</Text>
-          </View>
+          {imageUri ? (
+            <Pressable onPress={() => setImageUri(null)} style={pv.imagePreview}>
+              <View style={pv.imagePreview}>
+                <Ionicons name="checkmark-circle" size={48} color={C.success} />
+                <Text style={pv.cameraText}>Photo ready · Tap to clear</Text>
+              </View>
+            </Pressable>
+          ) : (
+            <View style={pv.cameraPlaceholder}>
+              <Ionicons name="image-outline" size={48} color={C.textMuted} />
+              <Text style={pv.cameraText}>Take or select a photo</Text>
+            </View>
+          )}
         </View>
 
         {/* Capture button */}
         <View style={pv.captureRow}>
-          <Pressable style={pv.galleryBtn}>
+          <Pressable style={pv.galleryBtn} onPress={handleGallery}>
             <Ionicons name="images-outline" size={24} color={C.textSecondary} />
           </Pressable>
 
@@ -99,16 +179,19 @@ export default function ProveScreen() {
 
         {/* Submit */}
         <Pressable
-          style={[pv.submitBtn, !selectedPool && { opacity: 0.4 }]}
-          disabled={!selectedPool}
+          style={[pv.submitBtn, (!selectedPoolId || !imageUri) && { opacity: 0.4 }]}
+          disabled={!selectedPoolId || !imageUri || submitting}
+          onPress={handleSubmit}
         >
           <LinearGradient
-            colors={selectedPool ? [C.brandFire, C.brandGold] : [C.bgElevated, C.bgElevated]}
+            colors={selectedPoolId && imageUri ? [C.brandFire, C.brandGold] : [C.bgElevated, C.bgElevated]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={pv.submitGradient}
           >
-            <Text style={pv.submitText}>Submit Proof</Text>
+            <Text style={pv.submitText}>
+              {submitting ? 'Submitting...' : 'Submit Proof'}
+            </Text>
           </LinearGradient>
         </Pressable>
       </View>
@@ -224,4 +307,16 @@ const pv = StyleSheet.create({
     justifyContent: "center",
   },
   submitText: { fontSize: 16, fontWeight: "700", color: C.white },
+  noPending: { fontSize: 14, color: C.textMuted, textAlign: "center", paddingVertical: 12 },
+  imagePreview: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    backgroundColor: C.bgSurface,
+    borderRadius: Radius.xl,
+    borderWidth: 2,
+    borderColor: C.success,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
 });

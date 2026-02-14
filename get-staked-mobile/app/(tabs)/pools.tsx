@@ -1,75 +1,40 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius, Fonts } from "@/constants/theme";
+import { useState } from "react";
+import { usePools, joinPool } from "@/hooks/use-pools";
+import { useAuth } from "@/lib/auth-context";
 
-const pools = [
-  {
-    id: "1",
-    emoji: "🏃",
-    name: "Morning Run Club",
-    duration: "7 days",
-    stake: "0.5 SOL",
-    players: 12,
-    maxPlayers: 20,
-    potSize: "6.0 SOL",
-    category: "fitness",
-    hot: true,
-  },
-  {
-    id: "2",
-    emoji: "📚",
-    name: "Daily Reader",
-    duration: "14 days",
-    stake: "0.5 SOL",
-    players: 8,
-    maxPlayers: 15,
-    potSize: "4.0 SOL",
-    category: "education",
-    hot: false,
-  },
-  {
-    id: "3",
-    emoji: "🧘",
-    name: "Meditation Master",
-    duration: "30 days",
-    stake: "1.0 SOL",
-    players: 5,
-    maxPlayers: 10,
-    potSize: "5.0 SOL",
-    category: "wellness",
-    hot: false,
-  },
-  {
-    id: "4",
-    emoji: "💻",
-    name: "Ship Code Daily",
-    duration: "7 days",
-    stake: "1.0 SOL",
-    players: 15,
-    maxPlayers: 20,
-    potSize: "15.0 SOL",
-    category: "productivity",
-    hot: true,
-  },
-  {
-    id: "5",
-    emoji: "🎸",
-    name: "Practice Guitar",
-    duration: "14 days",
-    stake: "0.25 SOL",
-    players: 6,
-    maxPlayers: 12,
-    potSize: "1.5 SOL",
-    category: "creative",
-    hot: false,
-  },
-];
-
-const categories = ["All", "Fitness", "Education", "Wellness", "Productivity"];
+const categories = ["All", "Fitness", "Education", "Wellness", "Productivity", "Creative"];
 
 export default function PoolsScreen() {
+  const [activeCategory, setActiveCategory] = useState("All");
+  const { user } = useAuth();
+  const categoryFilter = activeCategory === "All" ? undefined : activeCategory.toLowerCase();
+  const { pools, loading, refetch } = usePools(categoryFilter);
+  const [joining, setJoining] = useState<string | null>(null);
+
+  async function handleJoin(poolId: string) {
+    if (!user) {
+      Alert.alert("Error", "Please sign in to join a pool");
+      return;
+    }
+    setJoining(poolId);
+    try {
+      const { error } = await joinPool(poolId, user.id);
+      if (error) {
+        Alert.alert("Error", error.message);
+      } else {
+        Alert.alert("Success", "You've joined the pool!");
+        refetch();
+      }
+    } finally {
+      setJoining(null);
+    }
+  }
+
   return (
     <SafeAreaView style={p.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={p.scroll}>
@@ -87,80 +52,96 @@ export default function PoolsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={p.catRow}
         >
-          {categories.map((cat, i) => (
+          {categories.map((cat) => (
             <Pressable
               key={cat}
-              style={[p.catPill, i === 0 && p.catPillActive]}
+              onPress={() => setActiveCategory(cat)}
+              style={[p.catPill, activeCategory === cat && p.catPillActive]}
             >
-              <Text style={[p.catText, i === 0 && p.catTextActive]}>{cat}</Text>
+              <Text style={[p.catText, activeCategory === cat && p.catTextActive]}>{cat}</Text>
             </Pressable>
           ))}
         </ScrollView>
 
         {/* Pool Cards */}
-        <View style={p.list}>
-          {pools.map((pool) => (
-            <Pressable
-              key={pool.id}
-              style={({ pressed }) => [
-                p.card,
-                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              {/* Top row */}
-              <View style={p.cardTop}>
-                <View style={p.cardLeft}>
-                  <Text style={p.cardEmoji}>{pool.emoji}</Text>
-                  <View>
-                    <View style={p.nameRow}>
-                      <Text style={p.cardName}>{pool.name}</Text>
-                      {pool.hot && (
-                        <View style={p.hotBadge}>
-                          <Text style={p.hotText}>🔥 HOT</Text>
-                        </View>
-                      )}
+        {loading ? (
+          <ActivityIndicator color={C.brandFire} style={{ marginTop: 40 }} />
+        ) : pools.length === 0 ? (
+          <View style={p.emptyState}>
+            <Text style={p.emptyTitle}>No pools yet</Text>
+            <Text style={p.emptyDesc}>Be the first to create one!</Text>
+          </View>
+        ) : (
+          <View style={p.list}>
+            {pools.map((pool) => (
+              <Pressable
+                key={pool.id}
+                style={({ pressed }) => [
+                  p.card,
+                  pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+                ]}
+              >
+                {/* Top row */}
+                <View style={p.cardTop}>
+                  <View style={p.cardLeft}>
+                    <Text style={p.cardEmoji}>{pool.emoji || '🎯'}</Text>
+                    <View>
+                      <View style={p.nameRow}>
+                        <Text style={p.cardName}>{pool.name}</Text>
+                        {pool.is_hot && (
+                          <View style={p.hotBadge}>
+                            <Text style={p.hotText}>🔥 HOT</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={p.cardMeta}>
+                        {pool.duration_days}d · {pool.stake_amount} SOL entry
+                      </Text>
                     </View>
-                    <Text style={p.cardMeta}>{pool.duration} · {pool.stake} entry</Text>
                   </View>
                 </View>
-              </View>
 
-              {/* Stats row */}
-              <View style={p.statsRow}>
-                <View style={p.stat}>
-                  <Ionicons name="people-outline" size={14} color={C.textMuted} />
-                  <Text style={p.statText}>{pool.players}/{pool.maxPlayers}</Text>
+                {/* Stats row */}
+                <View style={p.statsRow}>
+                  <View style={p.stat}>
+                    <Ionicons name="people-outline" size={14} color={C.textMuted} />
+                    <Text style={p.statText}>
+                      {pool.current_players ?? 0}/{pool.max_players}
+                    </Text>
+                  </View>
+                  <View style={p.stat}>
+                    <Ionicons name="wallet-outline" size={14} color={C.textMuted} />
+                    <Text style={p.statText}>{(pool.pot_size ?? 0).toFixed(1)} SOL</Text>
+                  </View>
                 </View>
-                <View style={p.stat}>
-                  <Ionicons name="wallet-outline" size={14} color={C.textMuted} />
-                  <Text style={p.statText}>{pool.potSize}</Text>
+
+                {/* Players bar */}
+                <View style={p.barBg}>
+                  <View
+                    style={[
+                      p.barFill,
+                      { width: `${((pool.current_players ?? 0) / pool.max_players) * 100}%` },
+                    ]}
+                  />
                 </View>
-              </View>
 
-              {/* Players bar */}
-              <View style={p.barBg}>
-                <View
-                  style={[
-                    p.barFill,
-                    { width: `${(pool.players / pool.maxPlayers) * 100}%` },
-                  ]}
-                />
-              </View>
-
-              {/* Join button */}
-              <Pressable>
-                <LinearGradient
-                  colors={[C.brandFire, C.brandGold]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={p.joinBtn}
-                >
-                  <Text style={p.joinText}>Join · {pool.stake}</Text>
-                </LinearGradient>
+                {/* Join button */}
+                <Pressable onPress={() => handleJoin(pool.id)} disabled={joining === pool.id}>
+                  <LinearGradient
+                    colors={[C.brandFire, C.brandGold]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[p.joinBtn, joining === pool.id && { opacity: 0.5 }]}
+                  >
+                    <Text style={p.joinText}>
+                      {joining === pool.id ? 'Joining...' : `Join · ${pool.stake_amount} SOL`}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
               </Pressable>
-            </Pressable>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -254,4 +235,7 @@ const p = StyleSheet.create({
     borderRadius: Radius.md,
   },
   joinText: { fontSize: 14, fontWeight: "700", color: C.white },
+  emptyState: { alignItems: "center", paddingVertical: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: C.textPrimary, marginBottom: 6 },
+  emptyDesc: { fontSize: 14, color: C.textSecondary },
 });
