@@ -30,6 +30,7 @@ export const C = {
   fireLight: 'rgba(255,107,44,0.15)',
   goldDim: 'rgba(245,183,49,0.30)',
   successDim: 'rgba(0,232,120,0.20)',
+  successLight: 'rgba(0,232,120,0.15)',
   dangerDim: 'rgba(255,45,85,0.20)',
 };
 

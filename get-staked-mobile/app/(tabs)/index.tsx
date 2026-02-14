@@ -38,12 +38,14 @@ export default function DashboardScreen() {
         {/* Top bar */}
         <View style={d.topBar}>
           <Text style={d.brandName}>GET STAKED</Text>
-          <Pressable onPress={() => signOut()} style={d.walletPill}>
+          <Pressable onPress={() => router.push('/wallet')} style={d.walletPill}>
             <LinearGradient
               colors={[C.brandFire, C.brandGold]}
               style={d.walletDot}
             />
-            <Text style={d.walletText}>{solBalance.toFixed(2)} SOL</Text>
+            <Text style={d.walletText}>
+              {profile?.wallet_address ? `${solBalance.toFixed(2)} SOL` : 'Connect Wallet'}
+            </Text>
           </Pressable>
         </View>
 

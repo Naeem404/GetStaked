@@ -3,11 +3,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { C, Spacing, Radius, Fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 
 export default function AuthScreen() {
+  const params = useLocalSearchParams();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +63,25 @@ export default function AuthScreen() {
 
         {/* Form */}
         <View style={a.form}>
+          {message && (
+            <View style={a.successBox}>
+              <Ionicons name="checkmark-circle" size={20} color={C.success} />
+              <Text style={a.successText}>{message}</Text>
+            </View>
+          )}
+
+          {isSignUp && !error && !message && (
+            <View style={a.infoBox}>
+              <Ionicons name="information-circle" size={20} color={C.info} />
+              <View style={a.infoContent}>
+                <Text style={a.infoText}>Check your email for a confirmation link.</Text>
+                <Text style={a.infoSubText}>
+                  The link may open localhost - that's expected! Just close it and return here to sign in.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {isSignUp && (
             <View style={a.inputWrap}>
               <Ionicons name="person-outline" size={18} color={C.textMuted} style={a.inputIcon} />
@@ -157,6 +177,28 @@ const a = StyleSheet.create({
   subtitle: { fontSize: 16, color: C.textSecondary },
 
   form: { gap: 14 },
+  successBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.successLight,
+    padding: 12,
+    borderRadius: Radius.md,
+    marginBottom: 16,
+  },
+  successText: { fontSize: 14, color: C.success, marginLeft: 8 },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: C.bgSurface,
+    padding: 12,
+    borderRadius: Radius.md,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  infoContent: { flex: 1, marginLeft: 8 },
+  infoText: { fontSize: 14, color: C.textPrimary, marginBottom: 2 },
+  infoSubText: { fontSize: 12, color: C.textMuted },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',

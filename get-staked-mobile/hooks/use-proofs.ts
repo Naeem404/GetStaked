@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { Tables } from '@/lib/database.types';
 import { useAuth } from '@/lib/auth-context';
 
@@ -155,16 +155,49 @@ export async function submitProof(
       description: 'Submitted photo proof',
     });
 
-    // Simulate AI verification (in production, this would be an edge function)
-    // For now, auto-approve with random confidence
-    const confidence = 70 + Math.random() * 30;
-    await supabase.rpc('process_proof_verification', {
-      p_proof_id: data.id,
-      p_status: 'approved',
-      p_confidence: parseFloat(confidence.toFixed(2)),
-      p_reasoning: 'AI verification: Proof matches the required habit criteria.',
-      p_flags: JSON.stringify([]),
-    });
+    // Get pool info for verification context
+    const { data: poolData } = await supabase
+      .from('pools')
+      .select('name, proof_description')
+      .eq('id', poolId)
+      .single();
+
+    // Call Gemini AI verification Edge Function
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const verifyResponse = await fetch(
+        `${SUPABASE_URL}/functions/v1/verify-proof`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            proof_id: data.id,
+            image_url: imageUrl,
+            proof_description: poolData?.proof_description || 'Complete the required activity',
+            pool_name: poolData?.name || 'Pool',
+          }),
+        }
+      );
+
+      const verifyResult = await verifyResponse.json();
+      // Attach AI result to return data
+      (data as any).ai_result = verifyResult;
+    } catch (aiErr) {
+      console.warn('AI verification failed, falling back to auto-approve:', aiErr);
+      // Fallback: auto-approve if Gemini is not configured
+      await supabase.rpc('process_proof_verification', {
+        p_proof_id: data.id,
+        p_status: 'approved',
+        p_confidence: 0.75,
+        p_reasoning: 'Auto-approved: AI verification service unavailable.',
+        p_flags: JSON.stringify([]),
+      });
+    }
   }
 
   return { data, error };

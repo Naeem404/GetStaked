@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius, Fonts } from "@/constants/theme";
 import { useState } from "react";
+import { router } from "expo-router";
 import { usePools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
 
@@ -41,9 +42,15 @@ export default function PoolsScreen() {
         {/* Header */}
         <View style={p.header}>
           <Text style={p.title}>Browse Pools</Text>
-          <Pressable style={p.filterBtn}>
-            <Ionicons name="filter" size={18} color={C.textSecondary} />
-          </Pressable>
+          <View style={p.headerActions}>
+            <Pressable style={p.headerBtn} onPress={() => router.push('/friends')}>
+              <Ionicons name="people" size={18} color={C.textSecondary} />
+            </Pressable>
+            <Pressable style={p.createBtn} onPress={() => router.push('/create-pool')}>
+              <Ionicons name="add" size={18} color={C.white} />
+              <Text style={p.createBtnText}>Create</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Categories */}
@@ -238,4 +245,16 @@ const p = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: 40 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: C.textPrimary, marginBottom: 6 },
   emptyDesc: { fontSize: 14, color: C.textSecondary },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: C.bgSurface, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: C.border,
+  },
+  createBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
+    backgroundColor: C.brandFire,
+  },
+  createBtnText: { fontSize: 13, fontWeight: "700", color: C.white },
 });

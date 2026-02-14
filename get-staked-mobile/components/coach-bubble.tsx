@@ -1,5 +1,5 @@
-import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from "react-native";
-import { useState } from "react";
+import { View, Text, StyleSheet, Pressable, Modal, ScrollView, ActivityIndicator } from "react-native";
+import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { C, Spacing, Radius, Fonts } from "@/constants/theme";
@@ -12,7 +12,8 @@ import Animated, {
   withSpring,
   Easing,
 } from "react-native-reanimated";
-import { useEffect } from "react";
+import { useCoach, CoachPersona } from "@/hooks/use-coach";
+import { useAuth } from "@/lib/auth-context";
 
 type Persona = "drill-sergeant" | "hype-beast" | "gentle-guide";
 
@@ -47,6 +48,8 @@ export function CoachBubble() {
   const [open, setOpen] = useState(false);
   const [persona, setPersona] = useState<Persona>("drill-sergeant");
   const [hasMsg, setHasMsg] = useState(true);
+  const { message: coachMsg, loading: coachLoading, playing, getCoachMessage, stopAudio } = useCoach();
+  const { profile } = useAuth();
 
   const scale = useSharedValue(1);
   const glow = useSharedValue(0.3);
@@ -80,9 +83,27 @@ export function CoachBubble() {
 
   const p = personas[persona];
 
+  // Map UI persona keys to DB persona keys
+  const personaMap: Record<Persona, CoachPersona> = {
+    "drill-sergeant": "drill_sergeant",
+    "hype-beast": "hype_beast",
+    "gentle-guide": "gentle_guide",
+  };
+
   const handleOpen = () => {
     setHasMsg(false);
     setOpen(true);
+    // Fetch a fresh coach message
+    getCoachMessage('morning_reminder');
+  };
+
+  const handleQuickAction = (action: string) => {
+    const triggerMap: Record<string, string> = {
+      'Motivate Me': 'morning_reminder',
+      'How Am I Doing?': 'milestone_streak',
+      'SOS — Need Help': 'streak_broken',
+    };
+    getCoachMessage((triggerMap[action] || 'morning_reminder') as any);
   };
 
   return (
@@ -130,11 +151,17 @@ export function CoachBubble() {
 
           {/* Message */}
           <View style={cb.msgCard}>
-            <Text style={cb.msgText}>{p.msg}</Text>
+            {coachLoading ? (
+              <ActivityIndicator color={C.brandFire} style={{ paddingVertical: 12 }} />
+            ) : (
+              <Text style={cb.msgText}>{coachMsg || p.msg}</Text>
+            )}
             <View style={cb.waveRow}>
-              <Ionicons name="play" size={16} color={C.textMuted} />
+              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder')}>
+                <Ionicons name={playing ? "stop" : "play"} size={16} color={playing ? C.brandFire : C.textMuted} />
+              </Pressable>
               {[12, 18, 8, 22, 14, 10, 20, 16, 12].map((h, i) => (
-                <View key={i} style={[cb.waveBar, { height: h }]} />
+                <View key={i} style={[cb.waveBar, { height: h, backgroundColor: playing ? C.brandFire : C.textMuted }]} />
               ))}
             </View>
           </View>
@@ -145,6 +172,7 @@ export function CoachBubble() {
               <Pressable
                 key={a.label}
                 style={({ pressed }) => [cb.actionBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => handleQuickAction(a.label)}
               >
                 <Ionicons
                   name={a.icon}

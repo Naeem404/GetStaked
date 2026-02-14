@@ -17,6 +17,10 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="auth" options={{ presentation: "modal" }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="create-pool" options={{ presentation: "modal" }} />
+        <Stack.Screen name="friends" />
+        <Stack.Screen name="wallet" />
+        <Stack.Screen name="confirm-email" options={{ presentation: "modal" }} />
       </Stack>
     </AuthProvider>
   );
