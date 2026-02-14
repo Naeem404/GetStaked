@@ -21,13 +21,13 @@ const personas: Record<Persona, { name: string; icon: string; colors: [string, s
   "drill-sergeant": {
     name: "Drill Sergeant",
     icon: "⭐",
-    colors: [C.danger, C.brandFire],
+    colors: [C.danger, '#EF4444'],
     msg: "Day 5! Two people already dropped. Don't be number three.",
   },
   "hype-beast": {
     name: "Hype Beast",
     icon: "⚡",
-    colors: [C.brandGold, C.brandFire],
+    colors: [C.accent, '#FFB800'],
     msg: "FIRE STREAK! You're on a roll — keep it going! 🔥",
   },
   "gentle-guide": {
@@ -152,16 +152,16 @@ export function CoachBubble() {
           {/* Message */}
           <View style={cb.msgCard}>
             {coachLoading ? (
-              <ActivityIndicator color={C.brandFire} style={{ paddingVertical: 12 }} />
+              <ActivityIndicator color={C.primary} style={{ paddingVertical: 12 }} />
             ) : (
               <Text style={cb.msgText}>{coachMsg || p.msg}</Text>
             )}
             <View style={cb.waveRow}>
               <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder')}>
-                <Ionicons name={playing ? "stop" : "play"} size={16} color={playing ? C.brandFire : C.textMuted} />
+                <Ionicons name={playing ? "stop" : "play"} size={16} color={playing ? C.primary : C.textMuted} />
               </Pressable>
               {[12, 18, 8, 22, 14, 10, 20, 16, 12].map((h, i) => (
-                <View key={i} style={[cb.waveBar, { height: h, backgroundColor: playing ? C.brandFire : C.textMuted }]} />
+                <View key={i} style={[cb.waveBar, { height: h, backgroundColor: playing ? C.primary : C.textMuted }]} />
               ))}
             </View>
           </View>
@@ -213,7 +213,7 @@ const cb = StyleSheet.create({
     borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: C.brandFire,
+    shadowColor: C.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -279,7 +279,7 @@ const cb = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  personaPillActive: { borderColor: C.brandFire, backgroundColor: C.fireLight },
+  personaPillActive: { borderColor: C.primary, backgroundColor: C.primaryLight },
   personaPillText: { fontSize: 14 },
 
   msgCard: {

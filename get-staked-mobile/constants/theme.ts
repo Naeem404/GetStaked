@@ -1,37 +1,62 @@
 import { Platform } from 'react-native';
 
 export const C = {
-  bgPrimary: '#06060A',
-  bgSurface: '#0E0E18',
-  bgElevated: '#161625',
-  bgHover: '#1C1C30',
+  // Backgrounds — deep dark (from design-reference)
+  bgPrimary: '#0A0A0A',
+  bgSurface: '#121212',
+  bgElevated: '#1F1F1F',
+  bgHover: '#2A2A2A',
 
-  brandFire: '#FF6B2C',
-  brandGold: '#F5B731',
-  brandEmber: '#FF4500',
+  // Primary — emerald green (design-reference --primary: 142 71% 45%)
+  primary: '#22C55E',
+  primaryDim: 'rgba(34,197,94,0.15)',
+  primaryLight: 'rgba(34,197,94,0.10)',
+  primaryGlow: 'rgba(34,197,94,0.30)',
 
-  success: '#00E878',
-  danger: '#FF2D55',
-  warning: '#FFB020',
-  info: '#5B7FFF',
+  // Accent — orange (design-reference --accent: 33 100% 50%)
+  accent: '#FF8C00',
+  accentDim: 'rgba(255,140,0,0.20)',
+  accentLight: 'rgba(255,140,0,0.10)',
 
-  textPrimary: '#F2F2F7',
-  textSecondary: '#8888A0',
-  textMuted: '#4A4A60',
+  // Legacy aliases (so existing code doesn't break)
+  brandFire: '#22C55E',
+  brandGold: '#4ADE80',
+  brandEmber: '#16A34A',
 
-  border: 'rgba(255,255,255,0.06)',
-  borderLight: 'rgba(255,255,255,0.10)',
+  // Semantic
+  success: '#22C55E',
+  danger: '#DC2626',
+  warning: '#FF8C00',
+  info: '#3B82F6',
 
+  // Text
+  textPrimary: '#F2F2F2',
+  textSecondary: '#8C8C8C',
+  textMuted: '#555555',
+
+  // Borders
+  border: 'rgba(255,255,255,0.08)',
+  borderLight: 'rgba(255,255,255,0.14)',
+
+  // Base
   white: '#FFFFFF',
   black: '#000000',
   transparent: 'transparent',
 
-  fireDim: 'rgba(255,107,44,0.30)',
-  fireLight: 'rgba(255,107,44,0.15)',
-  goldDim: 'rgba(245,183,49,0.30)',
-  successDim: 'rgba(0,232,120,0.20)',
-  successLight: 'rgba(0,232,120,0.15)',
-  dangerDim: 'rgba(255,45,85,0.20)',
+  // Dim variants
+  fireDim: 'rgba(34,197,94,0.30)',
+  fireLight: 'rgba(34,197,94,0.15)',
+  goldDim: 'rgba(74,222,128,0.30)',
+  successDim: 'rgba(34,197,94,0.20)',
+  successLight: 'rgba(34,197,94,0.15)',
+  dangerDim: 'rgba(220,38,38,0.20)',
+
+  // Chart colors (from design-reference)
+  chart1: '#22C55E',
+  chart2: '#FF8C00',
+  chart3: '#DC2626',
+  chart4: '#3B82F6',
+  chart5: '#A855F7',
 };
 
 export const Fonts = Platform.select({

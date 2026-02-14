@@ -243,7 +243,7 @@ export default function CreatePoolScreen() {
           {/* Private Toggle */}
           <View style={s.toggleRow}>
             <View style={s.toggleInfo}>
-              <Ionicons name={isPrivate ? 'lock-closed' : 'globe-outline'} size={20} color={isPrivate ? C.brandFire : C.textMuted} />
+              <Ionicons name={isPrivate ? 'lock-closed' : 'globe-outline'} size={20} color={isPrivate ? C.primary : C.textMuted} />
               <View style={s.toggleText}>
                 <Text style={s.toggleTitle}>{isPrivate ? 'Private Pool' : 'Public Pool'}</Text>
                 <Text style={s.toggleSubtitle}>
@@ -254,8 +254,8 @@ export default function CreatePoolScreen() {
             <Switch
               value={isPrivate}
               onValueChange={setIsPrivate}
-              trackColor={{ false: C.bgSurface, true: C.fireDim }}
-              thumbColor={isPrivate ? C.brandFire : C.textMuted}
+              trackColor={{ false: C.bgSurface, true: C.primaryDim }}
+              thumbColor={isPrivate ? C.primary : C.textMuted}
             />
           </View>
 
@@ -299,7 +299,7 @@ export default function CreatePoolScreen() {
           {/* Create Button */}
           <Pressable style={s.createBtn} onPress={handleCreate} disabled={loading}>
             <LinearGradient
-              colors={[C.brandFire, C.brandGold]}
+              colors={[C.primary, '#16A34A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={s.createGradient}
@@ -339,7 +339,7 @@ const s = StyleSheet.create({
     backgroundColor: C.bgSurface, alignItems: 'center', justifyContent: 'center',
     marginRight: 8, borderWidth: 1, borderColor: C.border,
   },
-  emojiBtnSelected: { borderColor: C.brandFire, backgroundColor: C.fireLight },
+  emojiBtnSelected: { borderColor: C.primary, backgroundColor: C.primaryLight },
   emojiText: { fontSize: 22 },
 
   catRow: { flexDirection: 'row', marginBottom: 4 },
@@ -348,10 +348,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.full,
     backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border, marginRight: 8,
   },
-  catBtnSelected: { borderColor: C.brandFire, backgroundColor: C.fireLight },
+  catBtnSelected: { borderColor: C.primary, backgroundColor: C.primaryLight },
   catEmoji: { fontSize: 14 },
   catLabel: { fontSize: 13, color: C.textSecondary, fontWeight: '600' },
-  catLabelSelected: { color: C.brandFire },
+  catLabelSelected: { color: C.primary },
 
   row: { flexDirection: 'row', gap: 12 },
   halfCol: { flex: 1 },
@@ -362,9 +362,9 @@ const s = StyleSheet.create({
     backgroundColor: C.bgSurface, alignItems: 'center',
     borderWidth: 1, borderColor: C.border,
   },
-  freqBtnSelected: { borderColor: C.brandFire, backgroundColor: C.fireLight },
+  freqBtnSelected: { borderColor: C.primary, backgroundColor: C.primaryLight },
   freqLabel: { fontSize: 13, fontWeight: '600', color: C.textSecondary },
-  freqLabelSelected: { color: C.brandFire },
+  freqLabelSelected: { color: C.primary },
 
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -384,7 +384,7 @@ const s = StyleSheet.create({
     padding: Spacing.md, backgroundColor: C.bgSurface, borderRadius: Radius.md,
     marginBottom: 8, borderWidth: 1, borderColor: C.border,
   },
-  friendRowSelected: { borderColor: C.success, backgroundColor: 'rgba(0,232,120,0.08)' },
+  friendRowSelected: { borderColor: C.success, backgroundColor: C.primaryLight },
   friendAvatar: {
     width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgElevated,
     alignItems: 'center', justifyContent: 'center',

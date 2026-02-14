@@ -59,7 +59,7 @@ export function StreakCounter({ days, size = "sm" }: StreakCounterProps) {
     transform: [{ scale: numScale.value }],
   }));
 
-  const flameColor = days === 0 ? C.textMuted : C.brandFire;
+  const flameColor = days === 0 ? C.textMuted : C.primary;
 
   if (size === "xl") {
     return (
@@ -68,7 +68,7 @@ export function StreakCounter({ days, size = "sm" }: StreakCounterProps) {
           <Ionicons name="flame" size={72} color={flameColor} />
         </Animated.View>
         <Animated.View style={numAnim}>
-          <Text style={[s.xlNumber, days >= 15 && { color: C.brandGold }]}>
+          <Text style={[s.xlNumber, days >= 15 && { color: C.accent }]}>
             {days === 0 ? "—" : days}
           </Text>
         </Animated.View>
