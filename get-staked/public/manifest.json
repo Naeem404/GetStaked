@@ -1,0 +1,28 @@
+{
+  "name": "Get Staked",
+  "short_name": "GetStaked",
+  "description": "Social accountability PWA where users stake SOL on habits",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06060A",
+  "theme_color": "#06060A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["finance", "productivity", "lifestyle"],
+  "lang": "en",
+  "scope": "/",
+  "prefer_related_applications": false
+}
