@@ -2,18 +2,16 @@ import { View, Text, StyleSheet, Pressable, Modal, ScrollView, ActivityIndicator
 import { useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { C, Spacing, Radius, Fonts } from "@/constants/theme";
+import { C, Spacing, Radius } from "@/constants/theme";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withSequence,
   withTiming,
-  withSpring,
   Easing,
 } from "react-native-reanimated";
-import { useCoach, CoachPersona } from "@/hooks/use-coach";
-import { useAuth } from "@/lib/auth-context";
+import { useCoach } from "@/hooks/use-coach";
 
 type Persona = "drill-sergeant" | "hype-beast" | "gentle-guide";
 
@@ -49,7 +47,6 @@ export function CoachBubble() {
   const [persona, setPersona] = useState<Persona>("drill-sergeant");
   const [hasMsg, setHasMsg] = useState(true);
   const { message: coachMsg, loading: coachLoading, playing, getCoachMessage, stopAudio } = useCoach();
-  const { profile } = useAuth();
 
   const scale = useSharedValue(1);
   const glow = useSharedValue(0.3);
@@ -82,13 +79,6 @@ export function CoachBubble() {
   }));
 
   const p = personas[persona];
-
-  // Map UI persona keys to DB persona keys
-  const personaMap: Record<Persona, CoachPersona> = {
-    "drill-sergeant": "drill_sergeant",
-    "hype-beast": "hype_beast",
-    "gentle-guide": "gentle_guide",
-  };
 
   const handleOpen = () => {
     setHasMsg(false);

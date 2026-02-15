@@ -8,7 +8,7 @@ import { C, Spacing, Radius, Fonts } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 
 export default function AuthScreen() {
-  const params = useLocalSearchParams();
+  const { message, error: paramError } = useLocalSearchParams<{ message?: string; error?: string }>();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,7 +70,7 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {isSignUp && !error && !message && (
+          {isSignUp && !paramError && !message && (
             <View style={a.infoBox}>
               <Ionicons name="information-circle" size={20} color={C.info} />
               <View style={a.infoContent}>
