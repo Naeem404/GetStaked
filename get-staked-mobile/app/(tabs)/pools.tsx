@@ -274,7 +274,7 @@ export default function PoolsScreen() {
                         {pool.current_players ?? 0}/{pool.max_players} players
                       </Text>
                     </View>
-                    {pool.streak_leader && (
+                    {!!pool.streak_leader && (
                       <View style={p.metaItem}>
                         <Ionicons name="flame" size={13} color={C.accent} />
                         <Text style={p.metaText}>{pool.streak_leader}d best streak</Text>
@@ -293,7 +293,7 @@ export default function PoolsScreen() {
                   </View>
 
                   {/* Frequency tag */}
-                  {pool.frequency && (
+                  {!!pool.frequency && (
                     <View style={p.freqRow}>
                       <Ionicons name="flash" size={12} color={C.primary} />
                       <Text style={p.freqText}>{pool.frequency}</Text>
