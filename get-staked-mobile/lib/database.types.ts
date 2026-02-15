@@ -463,6 +463,97 @@ export type Database = {
           },
         ]
       }
+      friendships: {
+        Row: {
+          id: string
+          requester_id: string
+          addressee_id: string
+          status: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          requester_id: string
+          addressee_id: string
+          status?: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          requester_id?: string
+          addressee_id?: string
+          status?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_addressee_id_fkey"
+            columns: ["addressee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pool_invites: {
+        Row: {
+          id: string
+          pool_id: string
+          invited_by: string
+          invited_user_id: string
+          status: string | null
+          created_at: string | null
+          responded_at: string | null
+        }
+        Insert: {
+          id?: string
+          pool_id: string
+          invited_by: string
+          invited_user_id: string
+          status?: string | null
+          created_at?: string | null
+          responded_at?: string | null
+        }
+        Update: {
+          id?: string
+          pool_id?: string
+          invited_by?: string
+          invited_user_id?: string
+          status?: string | null
+          created_at?: string | null
+          responded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_invites_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_invites_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_invites_invited_user_id_fkey"
+            columns: ["invited_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -487,6 +578,53 @@ export type Database = {
         Returns: undefined
       }
       settle_pool: { Args: { p_pool_id: string }; Returns: undefined }
+      get_global_leaderboard: {
+        Args: { p_limit?: number }
+        Returns: {
+          user_id: string
+          display_name: string
+          username: string
+          avatar_url: string
+          wallet_address: string
+          current_streak: number
+          best_streak: number
+          total_pools_joined: number
+          total_pools_won: number
+          total_sol_earned: number
+          total_proofs_submitted: number
+          rank: number
+        }[]
+      }
+      get_pool_leaderboard: {
+        Args: { p_pool_id: string }
+        Returns: {
+          user_id: string
+          display_name: string
+          avatar_url: string
+          current_streak: number
+          best_streak: number
+          days_completed: number
+          total_proofs: number
+          rank: number
+        }[]
+      }
+      record_sol_transaction: {
+        Args: {
+          p_user_id: string
+          p_pool_id: string
+          p_type: string
+          p_amount: number
+          p_tx_signature: string
+        }
+        Returns: string
+      }
+      accept_pool_invite: {
+        Args: {
+          p_invite_id: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       coach_persona: "drill_sergeant" | "hype_beast" | "gentle_guide"

@@ -101,13 +101,18 @@ export function useUserStats() {
     try {
       setLoading(true);
 
-      // Calculate global streak from DB
-      const { data: streakData } = await supabase.rpc('calculate_global_streak', {
+      // Calculate global streak from DB — this RPC also persists to profiles table
+      const { data: streakData, error: streakErr } = await supabase.rpc('calculate_global_streak', {
         p_user_id: user.id,
       });
 
-      const currentStreak = streakData?.[0]?.current_streak ?? profile.current_streak ?? 0;
-      const bestStreak = streakData?.[0]?.best_streak ?? profile.best_streak ?? 0;
+      let currentStreak = profile.current_streak ?? 0;
+      let bestStreak = profile.best_streak ?? 0;
+
+      if (!streakErr && streakData && streakData.length > 0) {
+        currentStreak = streakData[0].current_streak ?? 0;
+        bestStreak = streakData[0].best_streak ?? 0;
+      }
 
       // Get total days with proofs
       const { count: totalDays } = await supabase
@@ -130,7 +135,7 @@ export function useUserStats() {
         .eq('user_id', user.id)
         .order('habit_date', { ascending: true })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       let completionRate = 0;
       if (firstDay) {
@@ -142,12 +147,24 @@ export function useUserStats() {
           : 0;
       }
 
+      // Get total SOL earned from transactions
+      const { data: txData } = await supabase
+        .from('transactions')
+        .select('amount')
+        .eq('user_id', user.id)
+        .eq('type', 'winnings_claim' as any)
+        .eq('status', 'confirmed');
+
+      const totalSolEarned = txData
+        ? txData.reduce((sum, tx) => sum + (tx.amount || 0), 0)
+        : (profile.total_sol_earned || 0);
+
       setStats({
         currentStreak,
         bestStreak,
         totalDays: totalDays || 0,
         completionRate,
-        totalSolEarned: profile.total_sol_earned || 0,
+        totalSolEarned,
         winRate,
       });
     } catch (err) {

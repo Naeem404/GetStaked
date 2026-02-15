@@ -13,21 +13,12 @@ interface HabitGridProps {
   data?: HabitDay[];
 }
 
-function generateMockData(numDays: number): HabitDay[] {
+function generateEmptyDays(numDays: number): HabitDay[] {
   const days: HabitDay[] = [];
   const today = new Date();
   for (let i = numDays - 1; i >= 0; i--) {
     const date = new Date(today.getTime() - i * 86400000);
-    const isToday = i === 0;
-    let count = 0;
-    if (!isToday) {
-      const rand = Math.random();
-      if (rand < 0.12) count = 0;
-      else if (rand < 0.35) count = 1;
-      else if (rand < 0.65) count = 2;
-      else count = 3;
-    }
-    days.push({ date, count, isToday });
+    days.push({ date, count: 0, isToday: i === 0 });
   }
   return days;
 }
@@ -51,7 +42,7 @@ function getDayBorder(day: HabitDay) {
 
 export function HabitGrid({ variant = "compact", data }: HabitGridProps) {
   const numDays = variant === "compact" ? 28 : 91;
-  const days = useMemo(() => data ?? generateMockData(numDays), [data, numDays]);
+  const days = useMemo(() => data ?? generateEmptyDays(numDays), [data, numDays]);
   const SQ = variant === "compact" ? 13 : 14;
   const GAP = 3;
   const ROWS = 7;

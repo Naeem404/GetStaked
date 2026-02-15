@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -172,6 +172,11 @@ export default function CongratulationsScreen() {
 
           <Pressable
             style={({ pressed }) => [st.btn, pressed && { opacity: 0.85 }]}
+            onPress={() => {
+              Share.share({
+                message: `🏆 I just placed ${rank}${getRankSuffix(rank)} on GetStaked with a score of ${parseInt(score).toLocaleString()}! Stake money, build habits, win big. 💰🔥`,
+              });
+            }}
           >
             <LinearGradient
               colors={["#A855F7", "#7C3AED"]}

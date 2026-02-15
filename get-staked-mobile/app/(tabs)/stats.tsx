@@ -7,6 +7,8 @@ import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
 import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
 import { useRecentActivity } from "@/hooks/use-proofs";
 import { useMyPools } from "@/hooks/use-pools";
+import { useGlobalLeaderboard, LeaderboardEntry } from "@/hooks/use-leaderboard";
+import { useAuth } from "@/lib/auth-context";
 import { router } from "expo-router";
 import { useState } from "react";
 
@@ -24,54 +26,81 @@ const AVATAR_COLORS = [
   ['#D980FA', '#BE2EDD'],
 ];
 
-// Fallback mock pools for leaderboard when no real data
-const mockPoolsForLeaderboard = [
-  {
-    id: 'mock-1',
-    name: 'Morning Runs',
-    stake_amount: 0.1,
-    duration_days: 7,
-    status: 'active',
-    current_players: 5,
-    max_players: 8,
-    pool_members: [
-      { id: '1', current_streak: 4, status: 'active', profiles: { display_name: 'Alex', avatar_url: null } },
-      { id: '2', current_streak: 2, status: 'active', profiles: { display_name: 'Sarah', avatar_url: null } },
-      { id: '3', current_streak: 3, status: 'active', profiles: { display_name: 'Mike', avatar_url: null } },
-      { id: '4', current_streak: 5, status: 'active', profiles: { display_name: 'Priya', avatar_url: null } },
-      { id: '5', current_streak: 1, status: 'active', profiles: { display_name: 'Jordan', avatar_url: null } },
-    ],
-  },
-  {
-    id: 'mock-2',
-    name: 'No Sugar Challenge',
-    stake_amount: 0.2,
-    duration_days: 14,
-    status: 'active',
-    current_players: 3,
-    max_players: 5,
-    pool_members: [
-      { id: '6', current_streak: 7, status: 'active', profiles: { display_name: 'Lena', avatar_url: null } },
-      { id: '7', current_streak: 3, status: 'active', profiles: { display_name: 'Raj', avatar_url: null } },
-      { id: '8', current_streak: 5, status: 'active', profiles: { display_name: 'Tina', avatar_url: null } },
-    ],
-  },
-];
+const RANK_MEDALS = ['🥇', '🥈', '🥉'];
 
 type TabType = 'leaderboard' | 'stats';
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('stats');
+  const { user } = useAuth();
   const { stats, loading: statsLoading } = useUserStats();
   const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
   const { pools: myPools, loading: poolsLoading } = useMyPools();
-
-  const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
+  const { entries: leaderboard, myRank, loading: lbLoading } = useGlobalLeaderboard(50);
 
   const getAvatarColors = (index: number): [string, string] => {
     const c = AVATAR_COLORS[index % AVATAR_COLORS.length];
     return [c[0], c[1]];
+  };
+
+  const renderLeaderboardRow = (entry: LeaderboardEntry, idx: number) => {
+    const isMe = entry.user_id === user?.id;
+    const colors = getAvatarColors(idx);
+    const name = entry.display_name || 'Anonymous';
+    const rankNum = entry.rank || idx + 1;
+
+    return (
+      <View key={entry.user_id} style={[lb.row, isMe && lb.rowMe]}>
+        {/* Rank */}
+        <View style={lb.rankWrap}>
+          {rankNum <= 3 ? (
+            <Text style={lb.medal}>{RANK_MEDALS[rankNum - 1]}</Text>
+          ) : (
+            <Text style={lb.rankNum}>#{rankNum}</Text>
+          )}
+        </View>
+
+        {/* Avatar */}
+        <LinearGradient colors={colors as [string, string]} style={lb.avatar}>
+          <Text style={lb.avatarText}>{name[0]?.toUpperCase() || '?'}</Text>
+        </LinearGradient>
+
+        {/* Info */}
+        <View style={lb.info}>
+          <Text style={[lb.name, isMe && { color: C.primary }]}>
+            {name} {isMe ? '(You)' : ''}
+          </Text>
+          <View style={lb.metaRow}>
+            {entry.current_streak > 0 && (
+              <View style={lb.metaItem}>
+                <Text style={lb.fireIcon}>🔥</Text>
+                <Text style={lb.metaText}>{entry.current_streak}d</Text>
+              </View>
+            )}
+            <View style={lb.metaItem}>
+              <Ionicons name="trophy-outline" size={10} color={C.textMuted} />
+              <Text style={lb.metaText}>{entry.total_pools_won}W</Text>
+            </View>
+            {entry.total_sol_earned > 0 && (
+              <View style={lb.metaItem}>
+                <Text style={[lb.metaText, { color: C.primary }]}>
+                  +{entry.total_sol_earned.toFixed(1)} SOL
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Streak badge */}
+        <View style={[lb.streakBadge, rankNum <= 3 && lb.streakBadgeTop]}>
+          <Text style={lb.streakIcon}>🔥</Text>
+          <Text style={[lb.streakValue, rankNum <= 3 && { color: C.primary }]}>
+            {entry.current_streak}
+          </Text>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -86,7 +115,7 @@ export default function LeaderboardScreen() {
         </Pressable>
       </View>
 
-      {/* Tab toggle — My Stats first, Leaderboard second */}
+      {/* Tab toggle */}
       <View style={st.tabRow}>
         <Pressable
           onPress={() => setActiveTab('stats')}
@@ -107,88 +136,162 @@ export default function LeaderboardScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
         {activeTab === 'leaderboard' ? (
           <>
-            {/* ── Pool-based Leaderboard ── */}
-            {poolsLoading ? (
+            {lbLoading ? (
               <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
+            ) : leaderboard.length === 0 ? (
+              <View style={st.emptyLeaderboard}>
+                <Ionicons name="trophy-outline" size={48} color={C.textMuted} />
+                <Text style={st.emptyLeaderTitle}>No Rankings Yet</Text>
+                <Text style={st.emptyLeaderSub}>
+                  Join a pool and submit proofs to climb the leaderboard!
+                </Text>
+                <Pressable style={st.emptyLeaderBtn} onPress={() => router.push('/(tabs)/pools')}>
+                  <Text style={st.emptyLeaderBtnText}>Browse Pools</Text>
+                </Pressable>
+              </View>
             ) : (
-              <View style={st.poolLeaderboardList}>
-                {displayPools.map((pool: any, poolIdx: number) => {
-                  const members = (pool.pool_members || [])
-                    .filter((m: any) => m.status === 'active')
-                    .sort((a: any, b: any) => (b.current_streak ?? 0) - (a.current_streak ?? 0));
-
-                  return (
-                    <View key={pool.id} style={st.poolLeaderCard}>
-                      {/* Pool header */}
-                      <View style={st.poolLeaderHeader}>
-                        <View>
-                          <Text style={st.poolLeaderName}>{pool.name}</Text>
-                          <Text style={st.poolLeaderMeta}>
-                            Stake: {pool.stake_amount} SOL • Duration: {pool.duration_days} Days •{' '}
-                            <Text style={{ color: C.primary, fontWeight: '700' }}>Active</Text>
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Leaderboard section */}
-                      <View style={st.poolLeaderSection}>
-                        <Text style={st.poolLeaderSectionTitle}>Leaderboard</Text>
-
-                        {/* Avatar row */}
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={st.poolAvatarRow}
-                        >
-                          {members.map((member: any, mIdx: number) => {
-                            const name = member.profiles?.display_name || 'User';
-                            const streak = member.current_streak ?? 0;
-                            const colors = getAvatarColors(mIdx);
-                            const verified = streak > 0;
-
-                            return (
-                              <View key={member.id} style={st.poolAvatarItem}>
-                                <View style={st.poolAvatarWrap}>
-                                  <LinearGradient
-                                    colors={colors}
-                                    style={st.poolAvatarRing}
-                                  >
-                                    <View style={st.poolAvatarInner}>
-                                      <Text style={st.poolAvatarLetter}>
-                                        {name[0]?.toUpperCase() || '?'}
-                                      </Text>
-                                    </View>
-                                  </LinearGradient>
-                                  {verified && (
-                                    <View style={st.poolVerifiedBadge}>
-                                      <Ionicons name="checkmark-circle" size={16} color={C.primary} />
-                                    </View>
-                                  )}
-                                </View>
-                                <Text style={st.poolStreakLabel}>{streak} Streak</Text>
-                              </View>
-                            );
-                          })}
-                        </ScrollView>
-
-                        {/* Submit Proof button */}
-                        <Pressable
-                          onPress={() => router.push('/(tabs)')}
-                          style={st.poolSubmitBtn}
-                        >
-                          <LinearGradient
-                            colors={[C.primary, '#4ADE80']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={st.poolSubmitGrad}
-                          >
-                            <Text style={st.poolSubmitText}>Submit Proof</Text>
-                          </LinearGradient>
-                        </Pressable>
-                      </View>
+              <View style={lb.container}>
+                {/* Top 3 Podium */}
+                {leaderboard.length >= 3 && (
+                  <View style={lb.podium}>
+                    {/* 2nd place */}
+                    <View style={lb.podiumItem}>
+                      <LinearGradient
+                        colors={getAvatarColors(1)}
+                        style={[lb.podiumAvatar, lb.podiumAvatar2nd]}
+                      >
+                        <Text style={lb.podiumAvatarText}>
+                          {(leaderboard[1]?.display_name || '?')[0]?.toUpperCase()}
+                        </Text>
+                      </LinearGradient>
+                      <Text style={lb.podiumMedal}>🥈</Text>
+                      <Text style={lb.podiumName} numberOfLines={1}>
+                        {leaderboard[1]?.display_name || 'User'}
+                      </Text>
+                      <Text style={lb.podiumStreak}>
+                        🔥 {leaderboard[1]?.current_streak ?? 0}
+                      </Text>
                     </View>
-                  );
-                })}
+
+                    {/* 1st place */}
+                    <View style={[lb.podiumItem, lb.podiumItemFirst]}>
+                      <View style={lb.crownWrap}>
+                        <Text style={lb.crownEmoji}>👑</Text>
+                      </View>
+                      <LinearGradient
+                        colors={['#FFD700', '#FFA500']}
+                        style={[lb.podiumAvatar, lb.podiumAvatar1st]}
+                      >
+                        <Text style={[lb.podiumAvatarText, { fontSize: 24 }]}>
+                          {(leaderboard[0]?.display_name || '?')[0]?.toUpperCase()}
+                        </Text>
+                      </LinearGradient>
+                      <Text style={lb.podiumMedal}>🥇</Text>
+                      <Text style={[lb.podiumName, { color: '#FFD700' }]} numberOfLines={1}>
+                        {leaderboard[0]?.display_name || 'User'}
+                      </Text>
+                      <Text style={lb.podiumStreak}>
+                        🔥 {leaderboard[0]?.current_streak ?? 0}
+                      </Text>
+                    </View>
+
+                    {/* 3rd place */}
+                    <View style={lb.podiumItem}>
+                      <LinearGradient
+                        colors={getAvatarColors(2)}
+                        style={[lb.podiumAvatar, lb.podiumAvatar3rd]}
+                      >
+                        <Text style={lb.podiumAvatarText}>
+                          {(leaderboard[2]?.display_name || '?')[0]?.toUpperCase()}
+                        </Text>
+                      </LinearGradient>
+                      <Text style={lb.podiumMedal}>🥉</Text>
+                      <Text style={lb.podiumName} numberOfLines={1}>
+                        {leaderboard[2]?.display_name || 'User'}
+                      </Text>
+                      <Text style={lb.podiumStreak}>
+                        🔥 {leaderboard[2]?.current_streak ?? 0}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* My rank card (if not in top list) */}
+                {myRank && myRank.rank > 3 && (
+                  <View style={lb.myRankCard}>
+                    <Text style={lb.myRankLabel}>YOUR RANK</Text>
+                    {renderLeaderboardRow(myRank, (myRank.rank || 1) - 1)}
+                  </View>
+                )}
+
+                {/* Full list */}
+                <View style={lb.listCard}>
+                  <Text style={lb.listTitle}>GLOBAL RANKINGS</Text>
+                  {leaderboard.slice(leaderboard.length >= 3 ? 3 : 0).map((entry, idx) =>
+                    renderLeaderboardRow(entry, idx + (leaderboard.length >= 3 ? 3 : 0))
+                  )}
+
+                  {/* Show top 3 in list too if less than 3 entries */}
+                  {leaderboard.length < 3 && leaderboard.map((entry, idx) =>
+                    renderLeaderboardRow(entry, idx)
+                  )}
+                </View>
+
+                {/* Pool leaderboards for pools user is in */}
+                {myPools.length > 0 && (
+                  <>
+                    <Text style={lb.poolSectionHeader}>YOUR POOLS</Text>
+                    {myPools.map((pool: any) => {
+                      const members = (pool.pool_members || [])
+                        .filter((m: any) => m.status === 'active')
+                        .sort((a: any, b: any) => (b.current_streak ?? 0) - (a.current_streak ?? 0));
+
+                      return (
+                        <Pressable
+                          key={pool.id}
+                          style={lb.poolCard}
+                          onPress={() => router.push({ pathname: '/pool-detail', params: { id: pool.id } })}
+                        >
+                          <View style={lb.poolHeader}>
+                            <Text style={lb.poolEmoji}>{pool.emoji || '🎯'}</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={lb.poolName}>{pool.name}</Text>
+                              <Text style={lb.poolMeta}>
+                                {pool.stake_amount} SOL • {pool.duration_days}d • {members.length} members
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color={C.textMuted} />
+                          </View>
+
+                          {/* Top 3 avatars */}
+                          <View style={lb.poolAvatarRow}>
+                            {members.slice(0, 5).map((member: any, mIdx: number) => {
+                              const mName = member.profiles?.display_name || 'User';
+                              const colors = getAvatarColors(mIdx);
+                              const isMe = member.user_id === user?.id;
+
+                              return (
+                                <View key={member.id} style={lb.poolAvatarItem}>
+                                  <LinearGradient
+                                    colors={colors as [string, string]}
+                                    style={[lb.poolMiniAvatar, isMe && lb.poolMiniAvatarMe]}
+                                  >
+                                    <Text style={lb.poolMiniAvatarText}>
+                                      {mName[0]?.toUpperCase() || '?'}
+                                    </Text>
+                                  </LinearGradient>
+                                  <Text style={lb.poolMiniStreak}>
+                                    🔥{member.current_streak ?? 0}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </>
+                )}
               </View>
             )}
           </>
@@ -376,6 +479,71 @@ export default function LeaderboardScreen() {
   );
 }
 
+const lb = StyleSheet.create({
+  container: { paddingHorizontal: Spacing.lg },
+  podium: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center',
+    paddingVertical: Spacing.xl, gap: Spacing.md, marginBottom: Spacing.lg,
+  },
+  podiumItem: { alignItems: 'center', flex: 1, gap: 4 },
+  podiumItemFirst: { marginBottom: 16 },
+  podiumAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  podiumAvatar1st: { width: 68, height: 68, borderRadius: 34 },
+  podiumAvatar2nd: { width: 52, height: 52, borderRadius: 26 },
+  podiumAvatar3rd: { width: 48, height: 48, borderRadius: 24 },
+  podiumAvatarText: { fontSize: 20, fontWeight: '800', color: C.white },
+  podiumMedal: { fontSize: 18 },
+  podiumName: { fontSize: 12, fontWeight: '700', color: C.textPrimary, textAlign: 'center', maxWidth: 80 },
+  podiumStreak: { fontSize: 11, color: C.accent, fontWeight: '600' },
+  crownWrap: { position: 'absolute', top: -18, zIndex: 10 },
+  crownEmoji: { fontSize: 20 },
+  myRankCard: {
+    backgroundColor: C.primaryDim, borderRadius: Radius.xl, padding: Spacing.md,
+    marginBottom: Spacing.lg, borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)',
+  },
+  myRankLabel: { fontSize: 10, fontWeight: '800', color: C.primary, letterSpacing: 1, marginBottom: 6, marginLeft: 4 },
+  listCard: {
+    backgroundColor: C.bgSurface, borderRadius: Radius.xl, padding: Spacing.md,
+    borderWidth: 1, borderColor: C.border, marginBottom: Spacing.lg,
+  },
+  listTitle: { fontSize: 11, fontWeight: '800', color: C.textMuted, letterSpacing: 1, marginBottom: Spacing.md, marginLeft: 4 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 8, borderRadius: Radius.md, marginBottom: 4 },
+  rowMe: { backgroundColor: C.primaryDim },
+  rankWrap: { width: 32, alignItems: 'center' },
+  medal: { fontSize: 18 },
+  rankNum: { fontSize: 13, fontWeight: '700', color: C.textMuted },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  avatarText: { fontSize: 14, fontWeight: '800', color: C.white },
+  info: { flex: 1 },
+  name: { fontSize: 14, fontWeight: '700', color: C.textPrimary },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  fireIcon: { fontSize: 10 },
+  metaText: { fontSize: 11, color: C.textMuted, fontWeight: '500' },
+  streakBadge: {
+    backgroundColor: C.bgElevated, paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: Radius.full, flexDirection: 'row', alignItems: 'center', gap: 3,
+  },
+  streakBadgeTop: { backgroundColor: C.primaryDim },
+  streakIcon: { fontSize: 10 },
+  streakValue: { fontSize: 12, fontWeight: '800', color: C.textPrimary },
+  poolSectionHeader: { fontSize: 11, fontWeight: '800', color: C.textMuted, letterSpacing: 1, marginBottom: Spacing.md, marginLeft: 4 },
+  poolCard: {
+    backgroundColor: C.bgSurface, borderRadius: Radius.xl, borderWidth: 1,
+    borderColor: C.border, padding: Spacing.lg, marginBottom: Spacing.md,
+  },
+  poolHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: Spacing.md },
+  poolEmoji: { fontSize: 28 },
+  poolName: { fontSize: 16, fontWeight: '800', color: C.textPrimary },
+  poolMeta: { fontSize: 12, color: C.textSecondary, marginTop: 2 },
+  poolAvatarRow: { flexDirection: 'row', gap: 12 },
+  poolAvatarItem: { alignItems: 'center', gap: 4 },
+  poolMiniAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  poolMiniAvatarMe: { borderWidth: 2, borderColor: C.primary },
+  poolMiniAvatarText: { fontSize: 14, fontWeight: '800', color: C.white },
+  poolMiniStreak: { fontSize: 10, color: C.textMuted, fontWeight: '600' },
+});
+
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bgPrimary },
   scroll: { paddingBottom: 120 },
@@ -420,113 +588,6 @@ const st = StyleSheet.create({
   tabActive: { backgroundColor: C.bgElevated },
   tabText: { fontSize: 14, fontWeight: "600", color: C.textMuted },
   tabTextActive: { color: C.textPrimary },
-
-  // ── Pool-based Leaderboard ──
-  poolLeaderboardList: {
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.lg,
-  },
-  poolLeaderCard: {
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: 'hidden',
-  },
-  poolLeaderHeader: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  poolLeaderName: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: C.textPrimary,
-    marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  poolLeaderMeta: {
-    fontSize: 13,
-    color: C.textSecondary,
-    lineHeight: 18,
-  },
-  poolLeaderSection: {
-    backgroundColor: C.bgElevated,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    padding: Spacing.lg,
-  },
-  poolLeaderSectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: C.textPrimary,
-    marginBottom: Spacing.lg,
-  },
-  poolAvatarRow: {
-    gap: 20,
-    paddingBottom: Spacing.lg,
-  },
-  poolAvatarItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  poolAvatarWrap: {
-    position: 'relative',
-  },
-  poolAvatarRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  poolAvatarInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: C.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  poolAvatarLetter: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: C.white,
-  },
-  poolVerifiedBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: C.bgPrimary,
-    borderRadius: 10,
-    padding: 1,
-  },
-  poolStreakLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: C.textSecondary,
-  },
-  poolSubmitBtn: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  poolSubmitGrad: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: Radius.lg,
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  poolSubmitText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: C.white,
-    letterSpacing: 0.5,
-  },
 
   // ── Stats Cards ──
   statsContainer: {
@@ -708,5 +769,37 @@ const st = StyleSheet.create({
   },
   heatmapContainer: {
     marginTop: 4,
+  },
+
+  // Empty leaderboard
+  emptyLeaderboard: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: Spacing.xl,
+    gap: 10,
+  },
+  emptyLeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.textPrimary,
+  },
+  emptyLeaderSub: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: 'center',
+  },
+  emptyLeaderBtn: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: C.primaryLight,
+    borderWidth: 1,
+    borderColor: C.primary,
+  },
+  emptyLeaderBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.primary,
   },
 });

@@ -32,9 +32,8 @@ export default function AuthScreen() {
         if (error) {
           Alert.alert('Sign Up Error', error.message);
         } else {
-          Alert.alert('Success', 'Check your email to confirm your account, then sign in.', [
-            { text: 'OK', onPress: () => setIsSignUp(false) },
-          ]);
+          // Email confirmation is disabled — user is signed in automatically
+          router.replace('/(tabs)');
         }
       } else {
         const { error } = await signIn(email, password);
@@ -91,17 +90,7 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {isSignUp && !errorParam && !message && (
-            <View style={a.infoBox}>
-              <Ionicons name="information-circle" size={20} color={C.info} />
-              <View style={a.infoContent}>
-                <Text style={a.infoText}>Check your email for a confirmation link.</Text>
-                <Text style={a.infoSubText}>
-                  The link may open localhost — that's expected! Just close it and return here to sign in.
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Info box removed — email confirmation is disabled */}
 
           {/* Form */}
           <View style={a.form}>

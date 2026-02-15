@@ -157,3 +157,71 @@ export async function removeFriend(friendshipId: string) {
 
   return { error };
 }
+
+/**
+ * Send pool invites to multiple friends
+ */
+export async function sendPoolInvites(
+  poolId: string,
+  invitedBy: string,
+  friendIds: string[],
+) {
+  const invites = friendIds.map(friendId => ({
+    pool_id: poolId,
+    invited_by: invitedBy,
+    invited_user_id: friendId,
+  }));
+
+  const { data, error } = await supabase
+    .from('pool_invites')
+    .insert(invites)
+    .select();
+
+  if (!error) {
+    // Log activity
+    await supabase.from('activity_log').insert({
+      user_id: invitedBy,
+      pool_id: poolId,
+      action: 'pool_invites_sent',
+      description: `Invited ${friendIds.length} friend(s) to pool`,
+    });
+  }
+
+  return { data, error };
+}
+
+/**
+ * Get friend IDs (useful for pool invite selection)
+ */
+export function useFriendIds() {
+  const { user } = useAuth();
+  const [friendIds, setFriendIds] = useState<string[]>([]);
+
+  const fetchIds = useCallback(async () => {
+    if (!user) return;
+
+    const { data: sent } = await supabase
+      .from('friendships')
+      .select('addressee_id')
+      .eq('requester_id', user.id)
+      .eq('status', 'accepted');
+
+    const { data: received } = await supabase
+      .from('friendships')
+      .select('requester_id')
+      .eq('addressee_id', user.id)
+      .eq('status', 'accepted');
+
+    const ids = [
+      ...(sent || []).map((f: any) => f.addressee_id),
+      ...(received || []).map((f: any) => f.requester_id),
+    ];
+    setFriendIds(ids);
+  }, [user]);
+
+  useEffect(() => {
+    fetchIds();
+  }, [fetchIds]);
+
+  return friendIds;
+}

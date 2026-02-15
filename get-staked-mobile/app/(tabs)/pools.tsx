@@ -10,15 +10,14 @@ import { useAuth } from "@/lib/auth-context";
 
 const filters = ["All", "Active", "Hot", "High Stakes", "New"];
 
-// Mock data matching the reference image — used as fallback when API returns empty
-const mockPools = [
-  { id: 'm1', name: 'Gym 5x/Week', description: 'Selfie with gym equipment visible', stake_amount: 0.5, pot_size: 3, current_players: 6, max_players: 8, duration_days: 7, streak_leader: 12, frequency: '5x/week', tag: 'ACTIVE' },
-  { id: 'm2', name: 'No Sugar Challenge', description: 'Photo of every meal — zero added sugar', stake_amount: 2, pot_size: 16, current_players: 8, max_players: 10, duration_days: 14, streak_leader: 9, frequency: 'Daily', tag: 'HOT' },
-  { id: 'm3', name: 'Morning Run 6AM', description: 'GPS-tagged run screenshot before 6:30 AM', stake_amount: 5, pot_size: 20, current_players: 4, max_players: 5, duration_days: 3, streak_leader: 18, frequency: 'Daily', tag: 'HIGH STAKES' },
-  { id: 'm4', name: 'Read 30min/Day', description: 'Photo of book with timestamp', stake_amount: 0.2, pot_size: 2, current_players: 10, max_players: 10, duration_days: 21, streak_leader: 6, frequency: 'Daily', tag: 'ACTIVE' },
-  { id: 'm5', name: 'Ship Code Daily', description: 'Screenshot of GitHub commit graph', stake_amount: 1, pot_size: 3, current_players: 3, max_players: 6, duration_days: 10, streak_leader: 4, frequency: 'Daily', tag: 'NEW' },
-  { id: 'm6', name: 'Cold Plunge', description: 'Video proof of 2-min cold exposure', stake_amount: 3, pot_size: 15, current_players: 5, max_players: 5, duration_days: 5, streak_leader: 15, frequency: 'Daily', tag: 'HOT' },
-];
+function getPoolTag(pool: any): string {
+  if (pool.is_hot) return 'HOT';
+  if ((pool.stake_amount ?? 0) >= 3) return 'HIGH STAKES';
+  const created = new Date(pool.created_at);
+  const daysSinceCreated = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysSinceCreated < 3) return 'NEW';
+  return 'ACTIVE';
+}
 
 export default function PoolsScreen() {
   const [activeFilter, setActiveFilter] = useState("All");
@@ -46,20 +45,12 @@ export default function PoolsScreen() {
     }
   }
 
-  // Use real pools if available, otherwise mock data
-  const allPools = pools.length > 0 ? pools : mockPools;
-
-  // Filter pools based on active filter
+  // Filter pools based on active filter using real DB fields
   const displayPools = activeFilter === "All"
-    ? allPools
-    : allPools.filter((pool: any) => {
-        const tag = (pool.tag || '').toUpperCase();
-        const filter = activeFilter.toUpperCase();
-        if (filter === 'ACTIVE') return tag === 'ACTIVE';
-        if (filter === 'HOT') return tag === 'HOT';
-        if (filter === 'HIGH STAKES') return tag === 'HIGH STAKES';
-        if (filter === 'NEW') return tag === 'NEW';
-        return true;
+    ? pools
+    : pools.filter((pool: any) => {
+        const tag = getPoolTag(pool);
+        return tag === activeFilter.toUpperCase();
       });
 
   const getTagStyle = (tag: string) => {
@@ -118,11 +109,11 @@ export default function PoolsScreen() {
           <View style={p.list}>
             {displayPools.map((pool: any) => {
               const fillPct = ((pool.current_players ?? 0) / (pool.max_players || 1)) * 100;
-              const tag = pool.tag || (pool.is_hot ? 'HOT' : 'ACTIVE');
+              const tag = getPoolTag(pool);
               const tagStyle = getTagStyle(tag);
 
               return (
-                <View key={pool.id} style={[p.card, tag === 'HOT' && p.cardHot]}>
+                <Pressable key={pool.id} style={[p.card, tag === 'HOT' && p.cardHot]} onPress={() => router.push({ pathname: '/pool-detail', params: { id: pool.id } })}>
                   {/* Tag + time left */}
                   <View style={p.cardHeader}>
                     <View style={[p.tag, { backgroundColor: tagStyle.bg }]}>
@@ -211,7 +202,7 @@ export default function PoolsScreen() {
                       <Ionicons name="open-outline" size={16} color={C.white} />
                     </LinearGradient>
                   </Pressable>
-                </View>
+                </Pressable>
               );
             })}
           </View>
