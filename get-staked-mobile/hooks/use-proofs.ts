@@ -51,7 +51,7 @@ export function usePendingProofs() {
 
       for (const membership of memberships || []) {
         const pool = (membership as any).pools;
-        if (!pool || pool.status !== 'active') continue;
+        if (!pool || (pool.status !== 'active' && pool.status !== 'waiting')) continue;
 
         // Check if proof already submitted today
         if (membership.last_proof_date === today) continue;
@@ -179,7 +179,7 @@ export async function submitProof(
       .single();
 
     // Try AI verification via Edge Function, fall back to auto-approve
-    await verifyProof(data.id, imageUrl, poolData, userId, memberId);
+    await verifyProof(data.id, imageUrl, poolData, userId, memberId, poolId);
   }
 
   return { data, error: null };
@@ -194,6 +194,7 @@ async function verifyProof(
   poolData: { name: string; proof_description: string } | null,
   userId: string,
   memberId: string,
+  poolId: string,
 ) {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -237,11 +238,24 @@ async function verifyProof(
       // Ultimate fallback: manually update the critical fields
       const today = new Date().toISOString().split('T')[0];
       await supabase.from('proofs').update({ status: 'approved', verified_at: new Date().toISOString() }).eq('id', proofId);
-      await supabase.from('pool_members').update({ last_proof_date: today }).eq('id', memberId);
+      await supabase.from('pool_members').update({
+        last_proof_date: today,
+        days_completed: ((await supabase.from('pool_members').select('days_completed').eq('id', memberId).single()).data?.days_completed ?? 0) + 1,
+        current_streak: ((await supabase.from('pool_members').select('current_streak').eq('id', memberId).single()).data?.current_streak ?? 0) + 1,
+      }).eq('id', memberId);
       await supabase.from('daily_habits').upsert(
         { user_id: userId, habit_date: today, proofs_count: 1 },
         { onConflict: 'user_id,habit_date' }
       );
+      // Update profile streak
+      const { data: memberData } = await supabase.from('pool_members').select('current_streak').eq('user_id', userId).eq('status', 'active').order('current_streak', { ascending: false }).limit(1).single();
+      const newStreak = memberData?.current_streak ?? 1;
+      const { data: profData } = await supabase.from('profiles').select('current_streak, best_streak').eq('id', userId).single();
+      await supabase.from('profiles').update({
+        current_streak: newStreak,
+        best_streak: Math.max(newStreak, profData?.best_streak ?? 0),
+        total_proofs_submitted: ((profData as any)?.total_proofs_submitted ?? 0) + 1,
+      }).eq('id', userId);
     }
   }
 }

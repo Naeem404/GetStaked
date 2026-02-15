@@ -3,12 +3,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius } from "@/constants/theme";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { useMyPools } from "@/hooks/use-pools";
 import { useUserStats } from "@/hooks/use-stats";
 import { usePendingProofs, submitProof } from "@/hooks/use-proofs";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   useSharedValue,
@@ -24,15 +24,15 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 export default function CameraDashboard() {
   const { profile, user } = useAuth();
-  const { pools: myPools, loading: poolsLoading } = useMyPools();
-  const { stats, loading: statsLoading } = useUserStats();
+  const { pools: myPools, loading: poolsLoading, refetch: refetchMyPools } = useMyPools();
+  const { stats, loading: statsLoading, refetch: refetchStats } = useUserStats();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("23:59:59");
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const { pendingProofs } = usePendingProofs();
+  const { pendingProofs, refetch: refetchProofs } = usePendingProofs();
   const [showPoolSheet, setShowPoolSheet] = useState(false);
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
@@ -40,6 +40,15 @@ export default function CameraDashboard() {
 
   const totalPot = myPools.reduce((sum, p) => sum + (p.pot_size ?? 0), 0);
   const activeCount = myPools.length;
+
+  // Refresh data when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      refetchMyPools();
+      refetchProofs();
+      refetchStats();
+    }, [])
+  );
 
   // Request camera permission on mount
   useEffect(() => {
@@ -259,6 +268,8 @@ export default function CameraDashboard() {
                   setImageBase64(null);
                   setSelectedPoolId(null);
                   setSelectedMemberId(null);
+                  refetchProofs();
+                  refetchStats();
                   Alert.alert('Verified! ✅', 'Your proof has been submitted and verified.');
                 }
               } catch (err: any) {

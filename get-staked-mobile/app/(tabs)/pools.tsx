@@ -333,23 +333,30 @@ export default function PoolsScreen() {
                     </View>
                   )}
 
-                  {/* Join Pool button */}
-                  <Pressable
-                    onPress={() => handleJoin(pool.id)}
-                    disabled={joining === pool.id}
-                  >
-                    <LinearGradient
-                      colors={[C.primary, '#4ADE80']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[p.joinBtn, joining === pool.id && { opacity: 0.5 }]}
+                  {/* Join Pool / Joined badge */}
+                  {myPoolIds.has(pool.id) ? (
+                    <View style={p.joinedBadge}>
+                      <Ionicons name="checkmark-circle" size={16} color={C.primary} />
+                      <Text style={p.joinedText}>Joined</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => handleJoin(pool.id)}
+                      disabled={joining === pool.id}
                     >
-                      <Text style={p.joinText}>
-                        {joining === pool.id ? 'Joining...' : 'Join Pool'}
-                      </Text>
-                      <Ionicons name="open-outline" size={16} color={C.white} />
-                    </LinearGradient>
-                  </Pressable>
+                      <LinearGradient
+                        colors={[C.primary, '#4ADE80']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[p.joinBtn, joining === pool.id && { opacity: 0.5 }]}
+                      >
+                        <Text style={p.joinText}>
+                          {joining === pool.id ? 'Joining...' : 'Join Pool'}
+                        </Text>
+                        <Ionicons name="open-outline" size={16} color={C.white} />
+                      </LinearGradient>
+                    </Pressable>
+                  )}
                 </Pressable>
               );
             })}
@@ -694,6 +701,18 @@ const p = StyleSheet.create({
     borderRadius: Radius.lg,
   },
   joinText: { fontSize: 15, fontWeight: "700", color: C.white },
+  joinedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  joinedText: { fontSize: 14, fontWeight: '600', color: C.primary },
 
   // Empty state
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 8 },

@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { ArrowRight, Flame } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -36,13 +37,15 @@ export function CtaSection() {
             </p>
 
             <div className="flex flex-col items-center gap-4 sm:flex-row">
-              <Button
-                size="lg"
-                className="group gap-2 bg-primary px-8 text-lg font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
-              >
-                Connect Wallet & Start
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Button>
+              <Link href="/auth">
+                <Button
+                  size="lg"
+                  className="group gap-2 bg-primary px-8 text-lg font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
+                >
+                  Create Account & Start
+                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
               <span className="text-sm text-muted-foreground">
                 Free to join. You only pay your stake.
               </span>

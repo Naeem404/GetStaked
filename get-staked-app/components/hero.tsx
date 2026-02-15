@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { ArrowRight, Zap, Shield, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -76,20 +77,24 @@ export function Hero() {
 
         {/* CTAs */}
         <div className="mb-16 flex flex-col items-center gap-4 sm:flex-row">
-          <Button
-            size="lg"
-            className="group gap-2 bg-primary px-8 text-lg font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
-          >
-            Start Staking
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="gap-2 border-border bg-secondary px-8 text-lg text-foreground hover:bg-secondary/80"
-          >
-            View Active Pools
-          </Button>
+          <Link href="/auth">
+            <Button
+              size="lg"
+              className="group gap-2 bg-primary px-8 text-lg font-semibold text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30"
+            >
+              Start Staking
+              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </Button>
+          </Link>
+          <Link href="/pools">
+            <Button
+              variant="outline"
+              size="lg"
+              className="gap-2 border-border bg-secondary px-8 text-lg text-foreground hover:bg-secondary/80"
+            >
+              View Active Pools
+            </Button>
+          </Link>
         </div>
 
         {/* Stats row */}
