@@ -51,14 +51,16 @@ END $$;
 
 -- Unique constraint on daily_habits
 DO $$ BEGIN
-  ALTER TABLE daily_habits ADD CONSTRAINT daily_habits_user_id_habit_date_key UNIQUE (user_id, habit_date);
-EXCEPTION WHEN duplicate_object THEN NULL;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_habits_user_id_habit_date_key') THEN
+    ALTER TABLE daily_habits ADD CONSTRAINT daily_habits_user_id_habit_date_key UNIQUE (user_id, habit_date);
+  END IF;
 END $$;
 
 -- Unique constraint on username
 DO $$ BEGIN
-  ALTER TABLE profiles ADD CONSTRAINT profiles_username_key UNIQUE (username);
-EXCEPTION WHEN duplicate_object THEN NULL;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_username_key') THEN
+    ALTER TABLE profiles ADD CONSTRAINT profiles_username_key UNIQUE (username);
+  END IF;
 END $$;
 
 

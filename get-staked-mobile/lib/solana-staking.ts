@@ -13,7 +13,7 @@ import {
 // Treasury wallet — all pool stakes get sent here.
 // Replace with your actual treasury/escrow wallet public key.
 export const TREASURY_WALLET = new PublicKey(
-  '11111111111111111111111111111111' // TODO: Replace with real treasury wallet
+  '4CC2ZMxs77zmT5g9L8bbjJiqKPqHm1oVgtifrKmfbhTy'
 );
 
 // Solana RPC endpoint
