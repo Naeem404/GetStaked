@@ -291,7 +291,7 @@ export default function LeaderboardScreen() {
                     {/* Title */}
                     <Text style={st.streakTitle}>Visualize your discipline</Text>
                     <Text style={st.streakSubtitle}>
-                      Every green square is money earned. Every gap is money lost.
+                      Every green circle is a habit streak. Every gap is a break in the streak.
                     </Text>
 
                     {/* Stats row */}
