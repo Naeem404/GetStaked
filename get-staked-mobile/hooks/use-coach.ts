@@ -1,7 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Audio } from 'expo-av';
 import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+
+// expo-file-system v19+ moved the classic API to /legacy
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const FileSystem = require('expo-file-system/legacy') as {
+  cacheDirectory: string | null;
+  writeAsStringAsync: (uri: string, contents: string, options?: { encoding: string }) => Promise<void>;
+  deleteAsync: (uri: string, options?: { idempotent: boolean }) => Promise<void>;
+};
 
 export type CoachPersona = 'drill_sergeant' | 'hype_beast' | 'gentle_guide';
 export type CoachTrigger =
@@ -27,7 +35,7 @@ export function useCoach() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const getCoachMessage = useCallback(async (
     trigger: CoachTrigger,
@@ -60,11 +68,17 @@ export function useCoach() {
         }
       );
 
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('Voice coach HTTP error:', response.status, errText);
+        return null;
+      }
+
       const data: CoachResponse = await response.json();
       setMessage(data.message);
 
       // Play audio if available and voice is enabled
-      if (data.audio && profile?.coach_voice_enabled !== false) {
+      if (data.audio && (profile as any)?.coach_voice_enabled !== false) {
         await playAudio(data.audio);
       }
 
@@ -80,8 +94,14 @@ export function useCoach() {
   const playAudio = async (base64Audio: string) => {
     try {
       // Stop any currently playing audio
-      if (sound) {
-        await sound.unloadAsync();
+      if (soundRef.current) {
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch {
+          // ignore cleanup errors
+        }
+        soundRef.current = null;
       }
 
       await Audio.setAudioModeAsync({
@@ -90,19 +110,25 @@ export function useCoach() {
         staysActiveInBackground: false,
       });
 
-      // Convert base64 to a data URI for playback
-      const uri = `data:audio/mpeg;base64,${base64Audio}`;
+      // Write base64 audio to a temp file — expo-av cannot play data: URIs on native
+      const tempFile = `${FileSystem.cacheDirectory}coach_audio_${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(tempFile, base64Audio, {
+        encoding: 'base64',
+      });
+
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri },
+        { uri: tempFile },
         { shouldPlay: true }
       );
 
-      setSound(newSound);
+      soundRef.current = newSound;
       setPlaying(true);
 
       newSound.setOnPlaybackStatusUpdate((status) => {
         if ('didJustFinish' in status && status.didJustFinish) {
           setPlaying(false);
+          // Clean up temp file in background
+          FileSystem.deleteAsync(tempFile, { idempotent: true }).catch(() => {});
         }
       });
     } catch (err) {
@@ -112,13 +138,17 @@ export function useCoach() {
   };
 
   const stopAudio = useCallback(async () => {
-    if (sound) {
-      await sound.stopAsync();
-      await sound.unloadAsync();
-      setSound(null);
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch {
+        // ignore
+      }
+      soundRef.current = null;
       setPlaying(false);
     }
-  }, [sound]);
+  }, []);
 
   return {
     message,
