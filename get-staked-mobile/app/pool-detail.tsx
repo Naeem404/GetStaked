@@ -10,8 +10,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { usePoolDetail, joinPool } from '@/hooks/use-pools';
-import { useSolana, useAccounts } from '@phantom/react-native-sdk';
-import { buildStakeTransaction } from '@/lib/solana-staking';
+import { getDemoBalance, stakeDemo } from '@/lib/demo-wallet';
 
 const AVATAR_COLORS = [
   ['#FF6B6B', '#EE5A24'], ['#A55EEA', '#8854D0'], ['#45AAF2', '#2D98DA'],
@@ -23,8 +22,6 @@ export default function PoolDetailScreen() {
   const { user } = useAuth();
   const { pool, loading, refetch } = usePoolDetail(id || null);
   const [joining, setJoining] = useState(false);
-  const { solana } = useSolana();
-  const { isConnected: walletConnected } = useAccounts();
 
   const isMember = pool?.my_membership != null;
   const members = (pool?.pool_members || [])
@@ -38,7 +35,7 @@ export default function PoolDetailScreen() {
     if (stakeAmt > 0) {
       Alert.alert(
         'Stake Required',
-        `This pool requires a ${stakeAmt} SOL stake. You'll be prompted to approve the transaction in Phantom.`,
+        `This pool requires ${stakeAmt} demo SOL.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: `Stake ${stakeAmt} SOL`, onPress: () => executeJoin(stakeAmt) },
@@ -55,27 +52,13 @@ export default function PoolDetailScreen() {
     try {
       let txSignature: string | undefined;
 
-      if (stakeAmt > 0 && walletConnected) {
-        try {
-          const fromAddress = await solana.getPublicKey();
-          if (!fromAddress) throw new Error('Could not get wallet address');
-          const { transaction } = await buildStakeTransaction(fromAddress as string, stakeAmt);
-          const result: any = await solana.signAndSendTransaction(transaction);
-          txSignature = result.hash || result.signature;
-        } catch (txErr: any) {
-          if (txErr?.message?.includes('rejected') || txErr?.message?.includes('cancelled')) {
-            Alert.alert('Cancelled', 'Transaction was cancelled.');
-            return;
-          }
-          Alert.alert('Transaction Failed', txErr?.message || 'Could not complete SOL transfer.');
+      if (stakeAmt > 0) {
+        const result = await stakeDemo(user.id, pool.id, stakeAmt);
+        if (!result.success) {
+          Alert.alert('Insufficient Balance', result.error || 'Not enough demo SOL.');
           return;
         }
-      } else if (stakeAmt > 0 && !walletConnected) {
-        Alert.alert('Wallet Required', 'Please connect your Phantom wallet first.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Connect Wallet', onPress: () => router.push('/wallet') },
-        ]);
-        return;
+        txSignature = result.txId;
       }
 
       const { error } = await joinPool(pool.id, user.id, txSignature);

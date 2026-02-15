@@ -212,6 +212,8 @@ async function verifyProof(
           image_url: imageUrl,
           proof_description: poolData?.proof_description || 'Complete the required activity',
           pool_name: poolData?.name || 'Pool',
+          pool_id: poolId,
+          user_id: userId,
         }),
       }
     );

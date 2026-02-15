@@ -90,6 +90,15 @@ Deno.serve(async (req: Request) => {
     if (ELEVENLABS_API_KEY && message) {
       try {
         const voiceId = VOICE_MAP[personaKey] || VOICE_MAP.drill_sergeant;
+
+        // Voice settings tuned per persona
+        const voiceSettings: Record<string, { stability: number; similarity_boost: number; style: number }> = {
+          drill_sergeant: { stability: 0.65, similarity_boost: 0.80, style: 0.4 },
+          hype_beast: { stability: 0.35, similarity_boost: 0.85, style: 0.7 },
+          gentle_guide: { stability: 0.80, similarity_boost: 0.70, style: 0.2 },
+        };
+        const settings = voiceSettings[personaKey] || voiceSettings.drill_sergeant;
+
         const ttsResponse = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
           {
@@ -97,13 +106,16 @@ Deno.serve(async (req: Request) => {
             headers: {
               "Content-Type": "application/json",
               "xi-api-key": ELEVENLABS_API_KEY,
+              "Accept": "audio/mpeg",
             },
             body: JSON.stringify({
               text: message,
-              model_id: "eleven_turbo_v2_5",
+              model_id: "eleven_multilingual_v2",
               voice_settings: {
-                stability: 0.5,
-                similarity_boost: 0.75,
+                stability: settings.stability,
+                similarity_boost: settings.similarity_boost,
+                style: settings.style,
+                use_speaker_boost: true,
               },
             }),
           }
@@ -111,7 +123,17 @@ Deno.serve(async (req: Request) => {
 
         if (ttsResponse.ok) {
           const audioBuffer = await ttsResponse.arrayBuffer();
-          audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+          // Convert to base64 in chunks to avoid stack overflow on large audio
+          const bytes = new Uint8Array(audioBuffer);
+          let binary = "";
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+          }
+          audio = btoa(binary);
+        } else {
+          const errBody = await ttsResponse.text();
+          console.error(`ElevenLabs API error (${ttsResponse.status}):`, errBody);
         }
       } catch (ttsErr) {
         console.error("ElevenLabs error:", ttsErr);

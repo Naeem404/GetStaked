@@ -8,10 +8,7 @@ import { router } from "expo-router";
 import { usePools, useMyPools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
 import { useCoach, CoachPersona } from "@/hooks/use-coach";
-import { useSolana, useAccounts } from "@phantom/react-native-sdk";
-import { buildStakeTransaction, SOLANA_RPC_URL } from "@/lib/solana-staking";
-import { getWalletBalance, getSolanaAddress } from "@/lib/wallet";
-import { Connection } from "@solana/web3.js";
+import { getDemoBalance, stakeDemo } from "@/lib/demo-wallet";
 
 const FREQUENCY_OPTIONS = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly'];
 
@@ -65,18 +62,19 @@ export default function PoolsScreen() {
   };
   const cp = personas[persona];
 
-  // Phantom SDK hooks for SOL staking
-  const { solana } = useSolana();
-  const { isConnected: walletConnected, addresses } = useAccounts();
+  // Demo wallet balance
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
-  // Fetch wallet balance when connected
-  const solAddress = walletConnected ? getSolanaAddress(addresses) : null;
+  // Fetch demo balance on mount and when user changes
   useEffect(() => {
-    if (solAddress) {
-      getWalletBalance(solAddress).then(b => setWalletBalance(b)).catch(() => {});
+    if (user) {
+      getDemoBalance(user.id).then(b => setWalletBalance(b)).catch(() => {});
     }
-  }, [solAddress]);
+  }, [user]);
+
+  const refreshDemoBalance = () => {
+    if (user) getDemoBalance(user.id).then(b => setWalletBalance(b)).catch(() => {});
+  };
 
   async function handleJoin(poolId: string) {
     if (!user) {
@@ -90,9 +88,10 @@ export default function PoolsScreen() {
 
     // If pool has a stake, confirm with user first
     if (stakeAmount > 0) {
+      const bal = walletBalance ?? 0;
       Alert.alert(
         "Stake Required",
-        `This pool requires a ${stakeAmount} SOL stake. You'll be prompted to approve the transaction in Phantom.`,
+        `This pool requires ${stakeAmount} demo SOL.\nYour balance: ${bal.toFixed(2)} demo SOL`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -113,48 +112,15 @@ export default function PoolsScreen() {
     try {
       let txSignature: string | undefined;
 
-      // If stake required AND wallet connected → do on-chain SOL transfer
-      // We use signTransaction + manual send to bypass Phantom's Blowfish scanner
-      // which blocks new/unverified dApps with "Transaction blocked by scanner"
-      if (stakeAmount > 0 && walletConnected) {
-        try {
-          const fromAddress = await solana.getPublicKey();
-          if (!fromAddress) throw new Error('Could not get wallet address');
-          const { transaction, connection } = await buildStakeTransaction(fromAddress as string, stakeAmount);
-
-          // Sign only (no scanner check) then send ourselves via devnet
-          const signedTx = await solana.signTransaction(transaction);
-          const rawTx = signedTx.serialize();
-          const sig = await connection.sendRawTransaction(rawTx, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-          });
-          await connection.confirmTransaction(sig, 'confirmed');
-          txSignature = sig;
-
-          // Refresh wallet balance after successful stake
-          if (solAddress) {
-            getWalletBalance(solAddress).then(b => setWalletBalance(b)).catch(() => {});
-          }
-        } catch (txErr: any) {
-          // User rejected or tx failed
-          if (txErr?.message?.includes('rejected') || txErr?.message?.includes('cancelled') || txErr?.message?.includes('User rejected')) {
-            Alert.alert("Cancelled", "Transaction was cancelled.");
-            return;
-          }
-          Alert.alert("Transaction Failed", txErr?.message || "Could not complete the SOL transfer.");
+      // Demo staking — deduct from Supabase balance (no real blockchain)
+      if (stakeAmount > 0) {
+        const result = await stakeDemo(user.id, poolId, stakeAmount);
+        if (!result.success) {
+          Alert.alert("Insufficient Balance", result.error || "Not enough demo SOL.");
           return;
         }
-      } else if (stakeAmount > 0 && !walletConnected) {
-        Alert.alert(
-          "Wallet Required",
-          "Please connect your Phantom wallet first to stake SOL.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Connect Wallet", onPress: () => router.push('/wallet') },
-          ]
-        );
-        return;
+        txSignature = result.txId;
+        refreshDemoBalance();
       }
 
       // Join pool in database (with tx signature if staked)
@@ -205,25 +171,17 @@ export default function PoolsScreen() {
         </Pressable>
       </View>
 
-      {/* Wallet Balance Banner */}
-      {walletConnected && solAddress ? (
+      {/* Demo Wallet Balance Banner */}
+      {user && (
         <Pressable style={p.walletBanner} onPress={() => router.push('/wallet')}>
           <View style={p.walletBannerLeft}>
             <Ionicons name="wallet" size={16} color={C.accent} />
-            <Text style={p.walletBannerAddr}>
-              {solAddress.slice(0, 4)}...{solAddress.slice(-4)}
-            </Text>
+            <Text style={p.walletBannerAddr}>Demo Wallet</Text>
           </View>
           <Text style={p.walletBannerBal}>
             {walletBalance !== null ? `${walletBalance.toFixed(2)} SOL` : '—'}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
-        </Pressable>
-      ) : (
-        <Pressable style={p.walletBannerConnect} onPress={() => router.push('/wallet')}>
-          <Ionicons name="wallet-outline" size={16} color={C.primary} />
-          <Text style={p.walletBannerConnectText}>Connect Wallet to Stake SOL</Text>
-          <Ionicons name="chevron-forward" size={14} color={C.primary} />
         </Pressable>
       )}
 
@@ -535,26 +493,6 @@ const p = StyleSheet.create({
     fontWeight: '800',
     color: C.accent,
   },
-  walletBannerConnect: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: C.primaryDim,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: C.primary,
-    gap: 8,
-  },
-  walletBannerConnectText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: C.primary,
-  },
-
   // LIVE POOLS badge
   liveBadgeRow: {
     paddingHorizontal: Spacing.xl,

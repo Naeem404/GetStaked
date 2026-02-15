@@ -160,8 +160,12 @@ export default function CameraDashboard() {
             </View>
           </View>
 
-          {/* Spacer to keep center aligned */}
-          <View style={{ width: 38 }} />
+          {/* Right: Proof Reviews */}
+          <Pressable onPress={() => router.push('/proof-reviews')} style={d.avatarBtn}>
+            <View style={[d.avatarGrad, { backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border }]}>
+              <Ionicons name="people" size={18} color={C.primary} />
+            </View>
+          </Pressable>
         </View>
       </SafeAreaView>
 
