@@ -59,6 +59,40 @@ const AVATAR_COLORS = [
 
 
 
+// Fallback mock pools for leaderboard when no real data
+const mockPoolsForLeaderboard = [
+  {
+    id: 'mock-1',
+    name: 'Morning Runs',
+    stake_amount: 0.1,
+    duration_days: 7,
+    status: 'active',
+    current_players: 5,
+    max_players: 8,
+    pool_members: [
+      { id: '1', current_streak: 4, status: 'active', profiles: { display_name: 'Alex', avatar_url: null } },
+      { id: '2', current_streak: 2, status: 'active', profiles: { display_name: 'Sarah', avatar_url: null } },
+      { id: '3', current_streak: 3, status: 'active', profiles: { display_name: 'Mike', avatar_url: null } },
+      { id: '4', current_streak: 5, status: 'active', profiles: { display_name: 'Priya', avatar_url: null } },
+      { id: '5', current_streak: 1, status: 'active', profiles: { display_name: 'Jordan', avatar_url: null } },
+    ],
+  },
+  {
+    id: 'mock-2',
+    name: 'No Sugar Challenge',
+    stake_amount: 0.2,
+    duration_days: 14,
+    status: 'active',
+    current_players: 3,
+    max_players: 5,
+    pool_members: [
+      { id: '6', current_streak: 7, status: 'active', profiles: { display_name: 'Lena', avatar_url: null } },
+      { id: '7', current_streak: 3, status: 'active', profiles: { display_name: 'Raj', avatar_url: null } },
+      { id: '8', current_streak: 5, status: 'active', profiles: { display_name: 'Tina', avatar_url: null } },
+    ],
+  },
+];
+
 type TabType = 'leaderboard' | 'stats';
 
 
@@ -78,6 +112,12 @@ export default function LeaderboardScreen() {
   const { pools: myPools, loading: poolsLoading, refetch: refetchMyPools } = useMyPools();
 
   const { entries: leaderboard, myRank, loading: lbLoading, refetch: refetchLb } = useGlobalLeaderboard(50);
+  const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
+
+  // Compute pool progress: total days completed / total pool duration days
+  const totalPoolDays = myPools.reduce((sum, p: any) => sum + (p.duration_days || 7), 0);
+  const myMemberData = myPools.map((p: any) => (p.pool_members || []).find((m: any) => m.user_id === user?.id));
+  const totalDaysCompleted = myMemberData.reduce((sum, m: any) => sum + (m?.days_completed ?? 0), 0);
 
   // Refresh all data when tab is focused
   useFocusEffect(
@@ -367,52 +407,17 @@ export default function LeaderboardScreen() {
               </View>
             )}
 
-            {/* ── Full Ranked List ── */}
-            {leaderboard.length > 0 && (
-              <View style={rk.rankedList}>
-                <Text style={rk.rankedListTitle}>Rankings</Text>
-                {leaderboard.map((entry, idx) => {
-                  const isMe = user && entry.user_id === user.id;
-                  const colors = getAvatarColors(idx);
-                  return (
-                    <View key={entry.user_id} style={[rk.rankedRow, isMe && rk.rankedRowMe]}>
-                      <Text style={[rk.rankedRank, isMe && rk.rankedRankMe]}>
-                        {entry.rank}
-                      </Text>
-                      <LinearGradient colors={colors} style={rk.rankedAvatar}>
-                        <Text style={rk.rankedAvatarText}>
-                          {(entry.display_name || '?')[0]?.toUpperCase() || '?'}
-                        </Text>
-                      </LinearGradient>
-                      <View style={rk.rankedInfo}>
-                        <Text style={[rk.rankedName, isMe && rk.rankedNameMe]} numberOfLines={1}>
-                          {entry.display_name || 'Anonymous'}{isMe ? ' (You)' : ''}
-                        </Text>
-                        <Text style={rk.rankedMeta}>
-                          {entry.current_streak} streak · {entry.total_proofs_submitted} proofs
-                        </Text>
-                      </View>
-                      <View style={rk.rankedStreakBadge}>
-                        <Ionicons name="flame" size={12} color={C.accent} />
-                        <Text style={rk.rankedStreakVal}>{entry.current_streak}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* ── Pool-based Leaderboard ── */}
+            {/* ── Pool-based Leaderboard (active joined pools only) ── */}
 
             {poolsLoading ? (
 
               <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
 
-            ) : myPools.length > 0 ? (
+            ) : (
 
               <View style={st.poolLeaderboardList}>
 
-                {myPools.map((pool: any, poolIdx: number) => {
+                {displayPools.map((pool: any, poolIdx: number) => {
 
                   const members = (pool.pool_members || [])
 
@@ -568,7 +573,7 @@ export default function LeaderboardScreen() {
 
               </View>
 
-            ) : null}
+            )}
 
           </>
             )}
@@ -615,7 +620,7 @@ export default function LeaderboardScreen() {
 
                     <Text style={st.streakSubtitle}>
 
-                      Every green square is money earned. Every gap is money lost.
+                      Every green circle is habit tracked. Every gap is streak broken.
 
                     </Text>
 
@@ -653,7 +658,7 @@ export default function LeaderboardScreen() {
 
                           <Text style={st.streakStatValue}>
 
-                            {stats.totalDays ?? 0}/91
+                            {stats.totalDays ?? 0}/{totalPoolDays || 91}
 
                           </Text>
 
@@ -745,7 +750,7 @@ export default function LeaderboardScreen() {
 
                       <Text style={[st.statCardBigNum, { color: C.primary }]}>
 
-                        {stats.completionRate ?? 0}
+                        {totalDaysCompleted || stats.totalDays || 0}
 
                       </Text>
 
@@ -753,13 +758,13 @@ export default function LeaderboardScreen() {
 
                         <Text style={[st.statCardDescText, { color: '#4ADE80' }]}>
 
-                          Out of {stats.totalDays ?? 0} day{(stats.totalDays ?? 0) !== 1 ? 's' : ''} completed
+                          Out of {totalPoolDays || 91} days across {myPools.length || 0} pool{myPools.length !== 1 ? 's' : ''}
 
                         </Text>
 
                         <Text style={[st.statCardDescSub, { color: C.textSecondary }]}>
 
-                          {stats.completionRate ?? 0}% completion rate
+                          {totalPoolDays > 0 ? Math.round(((totalDaysCompleted || stats.totalDays || 0) / totalPoolDays) * 100) : stats.completionRate ?? 0}% completion rate
 
                         </Text>
 

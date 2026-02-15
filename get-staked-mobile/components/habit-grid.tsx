@@ -85,7 +85,7 @@ export function HabitGrid({ variant = "compact", data }: HabitGridProps) {
                   {
                     width: SQ,
                     height: SQ,
-                    borderRadius: 3,
+                    borderRadius: SQ / 2,
                     backgroundColor: getDayBg(day),
                   },
                   getDayBorder(day),
@@ -120,5 +120,5 @@ const s = StyleSheet.create({
   gridCol: { flexDirection: "column" },
   legend: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "center", marginTop: 12 },
   legendText: { fontSize: 10, color: C.textMuted },
-  legendSq: { width: 10, height: 10, borderRadius: 2 },
+  legendSq: { width: 10, height: 10, borderRadius: 5 },
 });
