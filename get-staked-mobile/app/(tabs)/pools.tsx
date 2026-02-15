@@ -3,12 +3,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius } from "@/constants/theme";
-import { useState, useEffect } from "react";
-import { router } from "expo-router";
+import { useState, useEffect, useCallback } from "react";
+import { router, useFocusEffect } from "expo-router";
 import { usePools, useMyPools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
 import { useCoach, CoachPersona } from "@/hooks/use-coach";
-import { getDemoBalance, stakeDemo } from "@/lib/demo-wallet";
+import { getDemoBalance, stakeDemo, creditDemo } from "@/lib/demo-wallet";
 
 const FREQUENCY_OPTIONS = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly'];
 
@@ -39,7 +39,7 @@ export default function PoolsScreen() {
   const [activeFilter, setActiveFilter] = useState("Active");
   const { user } = useAuth();
   const { pools, loading, refetch } = usePools();
-  const { pools: myPools, loading: myLoading } = useMyPools();
+  const { pools: myPools, loading: myLoading, refetch: refetchMyPools } = useMyPools();
   const [joining, setJoining] = useState<string | null>(null);
 
   // Add Stake modal state
@@ -76,6 +76,18 @@ export default function PoolsScreen() {
     if (user) getDemoBalance(user.id).then(b => setWalletBalance(b)).catch(() => {});
   };
 
+  // Refresh data when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+      refetchMyPools();
+      refreshDemoBalance();
+    }, [user])
+  );
+
+  // Build a set of pool IDs the user has joined
+  const myPoolIds = new Set((myPools || []).map((p: any) => p.id));
+
   async function handleJoin(poolId: string) {
     if (!user) {
       Alert.alert("Error", "Please sign in to join a pool");
@@ -110,6 +122,12 @@ export default function PoolsScreen() {
     if (!user) return;
     setJoining(poolId);
     try {
+      // Check if already a member BEFORE deducting demo SOL
+      if (myPoolIds.has(poolId)) {
+        Alert.alert("Already Joined", "You're already a member of this pool!");
+        return;
+      }
+
       let txSignature: string | undefined;
 
       // Demo staking — deduct from Supabase balance (no real blockchain)
@@ -126,6 +144,11 @@ export default function PoolsScreen() {
       // Join pool in database (with tx signature if staked)
       const { error } = await joinPool(poolId, user.id, txSignature);
       if (error) {
+        // Refund demo SOL if join failed
+        if (stakeAmount > 0 && txSignature) {
+          await creditDemo(user.id, stakeAmount, 'refund', poolId);
+          refreshDemoBalance();
+        }
         Alert.alert("Error", error.message);
       } else {
         Alert.alert(
@@ -135,15 +158,19 @@ export default function PoolsScreen() {
             : "You've joined the pool! Good luck!"
         );
         refetch();
+        refetchMyPools();
+        refreshDemoBalance();
       }
     } finally {
       setJoining(null);
     }
   }
 
-  // Filter pools based on active filter using real DB fields
+  // Filter pools based on active filter
   const displayPools = activeFilter === "All"
     ? pools
+    : activeFilter === "Active"
+    ? pools.filter((pool: any) => myPoolIds.has(pool.id))
     : pools.filter((pool: any) => {
         const tag = getPoolTag(pool);
         return tag === activeFilter.toUpperCase();

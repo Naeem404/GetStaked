@@ -10,7 +10,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { usePoolDetail, joinPool } from '@/hooks/use-pools';
-import { getDemoBalance, stakeDemo } from '@/lib/demo-wallet';
+import { getDemoBalance, stakeDemo, creditDemo } from '@/lib/demo-wallet';
 
 const AVATAR_COLORS = [
   ['#FF6B6B', '#EE5A24'], ['#A55EEA', '#8854D0'], ['#45AAF2', '#2D98DA'],
@@ -48,6 +48,10 @@ export default function PoolDetailScreen() {
 
   async function executeJoin(stakeAmt: number) {
     if (!user || !pool) return;
+    if (isMember) {
+      Alert.alert('Already Joined', "You're already a member of this pool!");
+      return;
+    }
     setJoining(true);
     try {
       let txSignature: string | undefined;
@@ -63,6 +67,10 @@ export default function PoolDetailScreen() {
 
       const { error } = await joinPool(pool.id, user.id, txSignature);
       if (error) {
+        // Refund demo SOL if join failed
+        if (stakeAmt > 0 && txSignature) {
+          await creditDemo(user.id, stakeAmt, 'refund', pool.id);
+        }
         Alert.alert('Error', error.message);
       } else {
         Alert.alert(

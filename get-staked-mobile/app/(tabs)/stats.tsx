@@ -22,7 +22,9 @@ import { useAuth } from "@/lib/auth-context";
 
 import { router } from "expo-router";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
+
+import { useFocusEffect } from "expo-router";
 
 
 
@@ -67,15 +69,25 @@ export default function LeaderboardScreen() {
 
   const { user } = useAuth();
 
-  const { stats, loading: statsLoading } = useUserStats();
+  const { stats, loading: statsLoading, refetch: refetchStats } = useUserStats();
 
-  const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
+  const { days: habitDays, loading: gridLoading, refetch: refetchGrid } = useHabitGrid(91);
 
   const { activity, loading: activityLoading } = useRecentActivity(10);
 
-  const { pools: myPools, loading: poolsLoading } = useMyPools();
+  const { pools: myPools, loading: poolsLoading, refetch: refetchMyPools } = useMyPools();
 
-  const { entries: leaderboard, myRank, loading: lbLoading } = useGlobalLeaderboard(50);
+  const { entries: leaderboard, myRank, loading: lbLoading, refetch: refetchLb } = useGlobalLeaderboard(50);
+
+  // Refresh all data when tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      refetchStats();
+      refetchGrid();
+      refetchMyPools();
+      refetchLb();
+    }, [])
+  );
 
 
 

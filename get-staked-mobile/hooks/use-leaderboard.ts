@@ -55,9 +55,9 @@ export function useGlobalLeaderboard(limit: number = 50) {
         const { data, error } = await supabase
           .from('profiles')
           .select('id, display_name, username, avatar_url, wallet_address, current_streak, best_streak, total_pools_joined, total_pools_won, total_sol_earned, total_proofs_submitted')
-          .or('current_streak.gt.0,total_pools_joined.gt.0')
+          .or('current_streak.gt.0,total_pools_joined.gt.0,total_proofs_submitted.gt.0,best_streak.gt.0')
           .order('current_streak', { ascending: false, nullsFirst: false })
-          .order('best_streak', { ascending: false, nullsFirst: false })
+          .order('total_pools_joined', { ascending: false, nullsFirst: false })
           .order('total_proofs_submitted', { ascending: false, nullsFirst: false })
           .limit(limit);
 
