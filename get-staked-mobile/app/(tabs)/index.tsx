@@ -213,19 +213,6 @@ export default function CameraDashboard() {
         </View>
       )}
 
-      {/* Swipe hints */}
-      {!imageUri && (
-        <View style={d.swipeHints}>
-          <View style={d.swipeHint}>
-            <Ionicons name="chevron-back" size={14} color={C.textMuted} />
-            <Text style={d.swipeText}>Pools</Text>
-          </View>
-          <View style={d.swipeHint}>
-            <Text style={d.swipeText}>Leaderboard</Text>
-            <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -464,24 +451,4 @@ const d = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  // Swipe hints
-  swipeHints: {
-    position: 'absolute',
-    bottom: 80,
-    left: Spacing.xl,
-    right: Spacing.xl,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    zIndex: 5,
-  },
-  swipeHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  swipeText: {
-    fontSize: 11,
-    color: C.textMuted,
-    fontWeight: '500',
-  },
 });
