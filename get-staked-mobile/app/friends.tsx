@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { C, Spacing, Radius } from '@/constants/theme';
@@ -62,9 +63,14 @@ export default function FriendsScreen() {
     ]);
   }
 
-  // Check if a profile is already a friend or has pending request
   const friendIds = new Set(friends.map(f => f.friend.id));
   const pendingIds = new Set(pendingRequests.map(f => f.friend.id));
+
+  const AVATAR_COLORS = ['#22C55E', '#3B82F6', '#A855F7', '#F59E0B', '#EC4899', '#06B6D4'];
+  const getAvatarColor = (name: string) => {
+    const idx = (name || '?').charCodeAt(0) % AVATAR_COLORS.length;
+    return AVATAR_COLORS[idx];
+  };
 
   return (
     <SafeAreaView style={st.safe} edges={['top']}>
@@ -106,6 +112,7 @@ export default function FriendsScreen() {
           style={[st.tab, tab === 'friends' && st.tabActive]}
           onPress={() => setTab('friends')}
         >
+          <Ionicons name="people" size={16} color={tab === 'friends' ? C.primary : C.textMuted} />
           <Text style={[st.tabText, tab === 'friends' && st.tabTextActive]}>
             Friends ({friends.length})
           </Text>
@@ -114,6 +121,7 @@ export default function FriendsScreen() {
           style={[st.tab, tab === 'requests' && st.tabActive]}
           onPress={() => setTab('requests')}
         >
+          <Ionicons name="mail" size={16} color={tab === 'requests' ? C.primary : C.textMuted} />
           <Text style={[st.tabText, tab === 'requests' && st.tabTextActive]}>
             Requests {pendingRequests.length > 0 ? `(${pendingRequests.length})` : ''}
           </Text>
@@ -124,48 +132,54 @@ export default function FriendsScreen() {
         {/* Search Results */}
         {tab === 'search' && (
           <>
+            <Text style={st.sectionLabel}>SEARCH RESULTS</Text>
             {searching ? (
-              <ActivityIndicator color={C.brandFire} style={{ marginTop: 40 }} />
+              <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} />
             ) : results.length === 0 ? (
               <View style={st.emptyState}>
-                <Ionicons name="search-outline" size={48} color={C.textMuted} />
+                <View style={st.emptyIcon}>
+                  <Ionicons name="search-outline" size={32} color={C.textMuted} />
+                </View>
                 <Text style={st.emptyTitle}>
                   {searchQuery.length < 2 ? 'Type to search' : 'No users found'}
                 </Text>
                 <Text style={st.emptySubtitle}>Search by name or username</Text>
               </View>
             ) : (
-              results.map(profile => (
-                <View key={profile.id} style={st.personRow}>
-                  <View style={st.avatar}>
-                    <Text style={st.avatarText}>
-                      {(profile.display_name || '?')[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={st.personInfo}>
-                    <Text style={st.personName}>{profile.display_name || 'Unknown'}</Text>
-                    {profile.username && (
-                      <Text style={st.personUsername}>@{profile.username}</Text>
+              results.map(profile => {
+                const color = getAvatarColor(profile.display_name || '?');
+                return (
+                  <View key={profile.id} style={st.personRow}>
+                    <View style={[st.avatar, { backgroundColor: color + '20' }]}>
+                      <Text style={[st.avatarText, { color }]}>
+                        {(profile.display_name || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={st.personInfo}>
+                      <Text style={st.personName}>{profile.display_name || 'Unknown'}</Text>
+                      {profile.username && (
+                        <Text style={st.personUsername}>@{profile.username}</Text>
+                      )}
+                    </View>
+                    {friendIds.has(profile.id) ? (
+                      <View style={st.statusBadge}>
+                        <Ionicons name="checkmark-circle" size={16} color={C.success} />
+                        <Text style={st.statusText}>Friends</Text>
+                      </View>
+                    ) : pendingIds.has(profile.id) ? (
+                      <View style={[st.statusBadge, { backgroundColor: C.accentDim }]}>
+                        <Ionicons name="time" size={16} color={C.warning} />
+                        <Text style={[st.statusText, { color: C.warning }]}>Pending</Text>
+                      </View>
+                    ) : (
+                      <Pressable style={st.addBtn} onPress={() => handleSendRequest(profile)}>
+                        <Ionicons name="person-add" size={14} color={C.primary} />
+                        <Text style={st.addBtnText}>Add</Text>
+                      </Pressable>
                     )}
                   </View>
-                  {friendIds.has(profile.id) ? (
-                    <View style={st.statusBadge}>
-                      <Ionicons name="checkmark" size={14} color={C.success} />
-                      <Text style={st.statusText}>Friends</Text>
-                    </View>
-                  ) : pendingIds.has(profile.id) ? (
-                    <View style={st.statusBadge}>
-                      <Ionicons name="time" size={14} color={C.warning} />
-                      <Text style={[st.statusText, { color: C.warning }]}>Pending</Text>
-                    </View>
-                  ) : (
-                    <Pressable style={st.addBtn} onPress={() => handleSendRequest(profile)}>
-                      <Ionicons name="person-add" size={16} color={C.brandFire} />
-                      <Text style={st.addBtnText}>Add</Text>
-                    </Pressable>
-                  )}
-                </View>
-              ))
+                );
+              })
             )}
           </>
         )}
@@ -173,39 +187,45 @@ export default function FriendsScreen() {
         {/* Pending Requests */}
         {tab === 'requests' && (
           <>
+            <Text style={st.sectionLabel}>PENDING REQUESTS</Text>
             {pendingRequests.length === 0 ? (
               <View style={st.emptyState}>
-                <Ionicons name="mail-outline" size={48} color={C.textMuted} />
+                <View style={st.emptyIcon}>
+                  <Ionicons name="mail-outline" size={32} color={C.textMuted} />
+                </View>
                 <Text style={st.emptyTitle}>No pending requests</Text>
                 <Text style={st.emptySubtitle}>When someone adds you, it'll show up here</Text>
               </View>
             ) : (
-              pendingRequests.map(req => (
-                <View key={req.id} style={st.personRow}>
-                  <View style={st.avatar}>
-                    <Text style={st.avatarText}>
-                      {(req.friend.display_name || '?')[0].toUpperCase()}
-                    </Text>
+              pendingRequests.map(req => {
+                const color = getAvatarColor(req.friend.display_name || '?');
+                return (
+                  <View key={req.id} style={st.personRow}>
+                    <View style={[st.avatar, { backgroundColor: color + '20' }]}>
+                      <Text style={[st.avatarText, { color }]}>
+                        {(req.friend.display_name || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={st.personInfo}>
+                      <Text style={st.personName}>{req.friend.display_name || 'Unknown'}</Text>
+                      {req.friend.username && (
+                        <Text style={st.personUsername}>@{req.friend.username}</Text>
+                      )}
+                    </View>
+                    <View style={st.actionBtns}>
+                      <Pressable style={st.acceptBtn} onPress={() => handleAccept(req.id)}>
+                        <Ionicons name="checkmark" size={18} color={C.white} />
+                      </Pressable>
+                      <Pressable
+                        style={st.declineBtn}
+                        onPress={() => handleRemove(req.id, req.friend.display_name || 'this user')}
+                      >
+                        <Ionicons name="close" size={18} color={C.danger} />
+                      </Pressable>
+                    </View>
                   </View>
-                  <View style={st.personInfo}>
-                    <Text style={st.personName}>{req.friend.display_name || 'Unknown'}</Text>
-                    {req.friend.username && (
-                      <Text style={st.personUsername}>@{req.friend.username}</Text>
-                    )}
-                  </View>
-                  <View style={st.actionBtns}>
-                    <Pressable style={st.acceptBtn} onPress={() => handleAccept(req.id)}>
-                      <Ionicons name="checkmark" size={18} color={C.white} />
-                    </Pressable>
-                    <Pressable
-                      style={st.declineBtn}
-                      onPress={() => handleRemove(req.id, req.friend.display_name || 'this user')}
-                    >
-                      <Ionicons name="close" size={18} color={C.danger} />
-                    </Pressable>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </>
         )}
@@ -213,42 +233,52 @@ export default function FriendsScreen() {
         {/* Friends List */}
         {tab === 'friends' && (
           <>
+            <Text style={st.sectionLabel}>YOUR FRIENDS</Text>
             {loading ? (
-              <ActivityIndicator color={C.brandFire} style={{ marginTop: 40 }} />
+              <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} />
             ) : friends.length === 0 ? (
               <View style={st.emptyState}>
-                <Ionicons name="people-outline" size={48} color={C.textMuted} />
+                <View style={st.emptyIcon}>
+                  <Ionicons name="people-outline" size={32} color={C.textMuted} />
+                </View>
                 <Text style={st.emptyTitle}>No friends yet</Text>
                 <Text style={st.emptySubtitle}>Search for people above to add them!</Text>
+                <Pressable style={st.emptyBtn} onPress={() => setTab('search')}>
+                  <Ionicons name="search" size={16} color={C.primary} />
+                  <Text style={st.emptyBtnText}>Find Friends</Text>
+                </Pressable>
               </View>
             ) : (
-              friends.map(f => (
-                <Pressable key={f.id} style={st.personRow}>
-                  <View style={st.avatar}>
-                    <Text style={st.avatarText}>
-                      {(f.friend.display_name || '?')[0].toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={st.personInfo}>
-                    <Text style={st.personName}>{f.friend.display_name || 'Unknown'}</Text>
-                    {f.friend.username && (
-                      <Text style={st.personUsername}>@{f.friend.username}</Text>
-                    )}
-                    {(f.friend.current_streak ?? 0) > 0 && (
-                      <View style={st.streakRow}>
-                        <Text style={st.streakIcon}>🔥</Text>
-                        <Text style={st.streakText}>{f.friend.current_streak} day streak</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Pressable
-                    style={st.moreBtn}
-                    onPress={() => handleRemove(f.id, f.friend.display_name || 'this user')}
-                  >
-                    <Ionicons name="ellipsis-horizontal" size={20} color={C.textMuted} />
+              friends.map(f => {
+                const color = getAvatarColor(f.friend.display_name || '?');
+                return (
+                  <Pressable key={f.id} style={st.personRow}>
+                    <View style={[st.avatar, { backgroundColor: color + '20' }]}>
+                      <Text style={[st.avatarText, { color }]}>
+                        {(f.friend.display_name || '?')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={st.personInfo}>
+                      <Text style={st.personName}>{f.friend.display_name || 'Unknown'}</Text>
+                      {f.friend.username && (
+                        <Text style={st.personUsername}>@{f.friend.username}</Text>
+                      )}
+                      {(f.friend.current_streak ?? 0) > 0 && (
+                        <View style={st.streakRow}>
+                          <Ionicons name="flame" size={12} color={C.accent} />
+                          <Text style={st.streakText}>{f.friend.current_streak} day streak</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Pressable
+                      style={st.moreBtn}
+                      onPress={() => handleRemove(f.id, f.friend.display_name || 'this user')}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={20} color={C.textMuted} />
+                    </Pressable>
                   </Pressable>
-                </Pressable>
-              ))
+                );
+              })
             )}
           </>
         )}
@@ -264,9 +294,9 @@ const st = StyleSheet.create({
     paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
   },
   backBtn: { padding: 4 },
-  title: { fontSize: 24, fontWeight: '800', color: C.textPrimary, flex: 1 },
+  title: { fontSize: 26, fontWeight: '800', color: C.textPrimary, flex: 1 },
   badge: {
-    backgroundColor: C.danger, borderRadius: 12,
+    backgroundColor: C.primary, borderRadius: 12,
     minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 6,
   },
@@ -285,13 +315,18 @@ const st = StyleSheet.create({
     marginBottom: Spacing.md, gap: 8,
   },
   tab: {
-    flex: 1, paddingVertical: 10, borderRadius: Radius.md,
-    backgroundColor: C.bgSurface, alignItems: 'center',
-    borderWidth: 1, borderColor: C.border,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: C.bgSurface, borderWidth: 1, borderColor: C.border,
   },
-  tabActive: { borderColor: C.brandFire, backgroundColor: C.fireLight },
+  tabActive: { borderColor: C.primary, backgroundColor: C.primaryLight },
   tabText: { fontSize: 13, fontWeight: '600', color: C.textSecondary },
-  tabTextActive: { color: C.brandFire },
+  tabTextActive: { color: C.primary },
+
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', color: C.textMuted,
+    letterSpacing: 1, marginBottom: Spacing.sm,
+  },
 
   scroll: { paddingHorizontal: Spacing.xl, paddingBottom: 100 },
 
@@ -301,33 +336,33 @@ const st = StyleSheet.create({
     marginBottom: 8, borderWidth: 1, borderColor: C.border,
   },
   avatar: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: C.bgElevated,
+    width: 46, height: 46, borderRadius: 23,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 18, fontWeight: '700', color: C.textPrimary },
+  avatarText: { fontSize: 18, fontWeight: '700' },
   personInfo: { flex: 1 },
   personName: { fontSize: 15, fontWeight: '600', color: C.textPrimary },
   personUsername: { fontSize: 12, color: C.textMuted, marginTop: 1 },
-  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  streakIcon: { fontSize: 12 },
-  streakText: { fontSize: 11, color: C.brandFire, fontWeight: '600' },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  streakText: { fontSize: 11, color: C.accent, fontWeight: '600' },
 
   addBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.md,
-    backgroundColor: C.fireLight, borderWidth: 1, borderColor: C.brandFire,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.md,
+    backgroundColor: C.primaryLight, borderWidth: 1, borderColor: C.primary,
   },
-  addBtnText: { fontSize: 13, fontWeight: '600', color: C.brandFire },
+  addBtnText: { fontSize: 13, fontWeight: '600', color: C.primary },
 
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.sm,
+    backgroundColor: C.primaryLight,
   },
   statusText: { fontSize: 12, color: C.success, fontWeight: '600' },
 
   actionBtns: { flexDirection: 'row', gap: 8 },
   acceptBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: C.success,
+    width: 36, height: 36, borderRadius: 18, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
   },
   declineBtn: {
@@ -337,7 +372,19 @@ const st = StyleSheet.create({
   },
   moreBtn: { padding: 8 },
 
-  emptyState: { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary },
+  emptyState: { alignItems: 'center', paddingTop: 48, gap: 10 },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: C.bgSurface, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border, marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: C.textPrimary },
   emptySubtitle: { fontSize: 13, color: C.textMuted },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: C.primaryLight, borderWidth: 1, borderColor: C.primary,
+    marginTop: 8,
+  },
+  emptyBtnText: { fontSize: 14, fontWeight: '600', color: C.primary },
 });

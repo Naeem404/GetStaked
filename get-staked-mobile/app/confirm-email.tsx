@@ -40,7 +40,7 @@ export default function ConfirmEmailScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={C.brandFire} />
+        <ActivityIndicator size="large" color={C.primary} />
         <Text style={styles.text}>Confirming your email...</Text>
       </View>
     </SafeAreaView>

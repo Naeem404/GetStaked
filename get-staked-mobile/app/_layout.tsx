@@ -22,11 +22,11 @@ export default function RootLayout() {
       appName="Get Staked"
     >
       <AuthProvider>
-        <StatusBar style="light" backgroundColor="#06060A" />
+        <StatusBar style="light" backgroundColor="#0A0A0A" />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: "#06060A" },
+            contentStyle: { backgroundColor: "#0A0A0A" },
             animation: "slide_from_right",
           }}
         >
@@ -37,6 +37,7 @@ export default function RootLayout() {
           <Stack.Screen name="friends" />
           <Stack.Screen name="wallet" />
           <Stack.Screen name="confirm-email" options={{ presentation: "modal" }} />
+          <Stack.Screen name="congratulations" options={{ presentation: "modal", animation: "fade" }} />
         </Stack>
       </AuthProvider>
     </PhantomProvider>

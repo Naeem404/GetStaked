@@ -4,24 +4,26 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Custom dark theme colors
-        'bg-primary': '#06060A',
-        'bg-surface': '#0E0E18',
-        'bg-elevated': '#161625',
-        'bg-hover': '#1C1C30',
+        // Design-reference dark theme
+        'bg-primary': '#0A0A0A',
+        'bg-surface': '#121212',
+        'bg-elevated': '#1F1F1F',
+        'bg-hover': '#2A2A2A',
         
-        'brand-fire': '#FF6B2C',
-        'brand-gold': '#F5B731',
-        'brand-ember': '#FF4500',
+        'primary': '#22C55E',
+        'accent': '#FF8C00',
+        'brand-fire': '#22C55E',
+        'brand-gold': '#4ADE80',
+        'brand-ember': '#16A34A',
         
-        'success': '#00E878',
-        'danger': '#FF2D55',
-        'warning': '#FFB020',
-        'info': '#5B7FFF',
+        'success': '#22C55E',
+        'danger': '#DC2626',
+        'warning': '#FF8C00',
+        'info': '#3B82F6',
         
-        'text-primary': '#F2F2F7',
-        'text-secondary': '#8888A0',
-        'text-muted': '#4A4A60',
+        'text-primary': '#F2F2F2',
+        'text-secondary': '#8C8C8C',
+        'text-muted': '#555555',
       },
       fontFamily: {
         'inter': ['Inter', 'sans-serif'],

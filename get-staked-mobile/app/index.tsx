@@ -13,6 +13,13 @@ const steps = [
   { icon: "trophy" as const, title: "WIN", desc: "Complete the challenge, win the pot" },
 ];
 
+const stats = [
+  { value: "2,847", label: "Active Stakers" },
+  { value: "156", label: "Live Pools" },
+  { value: "89K", label: "SOL Staked" },
+  { value: "94%", label: "Payout Rate" },
+];
+
 export default function LandingPage() {
   const { session, loading } = useAuth();
 
@@ -25,7 +32,7 @@ export default function LandingPage() {
   if (loading) {
     return (
       <View style={[s.safe, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={C.brandFire} />
+        <ActivityIndicator size="large" color={C.primary} />
       </View>
     );
   }
@@ -33,29 +40,50 @@ export default function LandingPage() {
   return (
     <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* Live badge */}
+        <View style={s.badgeRow}>
+          <View style={s.liveBadge}>
+            <View style={s.liveDot} />
+            <Text style={s.liveText}>Live on Solana Devnet</Text>
+          </View>
+        </View>
+
         {/* Hero */}
         <View style={s.hero}>
-          <Text style={s.logo}>🔥</Text>
-          <Text style={s.title}>GET STAKED</Text>
+          <Text style={s.heroLine}>Stake Money.</Text>
+          <Text style={s.heroLine}>Build Habits.</Text>
+          <Text style={s.heroLineGreen}>Win Big.</Text>
+
           <Text style={s.subtitle}>
-            Stake SOL on your habits.{"\n"}Win or lose. No excuses.
-          </Text>
-          <Text style={s.desc}>
-            Join competitive pools, submit photo proof, and let AI verify.
-            Winners split the pot.
+            Put your money where your mouth is. Stake SOL on your habits,
+            get AI-verified, and split the losers' money.
           </Text>
 
           <Pressable onPress={() => router.push("/auth")}>
             <LinearGradient
-              colors={[C.brandFire, C.brandGold]}
+              colors={[C.primary, '#4ADE80']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={s.ctaBtn}
             >
-              <Text style={s.ctaText}>Connect Wallet</Text>
+              <Text style={s.ctaText}>Start Staking</Text>
               <Ionicons name="arrow-forward" size={20} color={C.white} />
             </LinearGradient>
           </Pressable>
+
+          <Pressable onPress={() => router.push("/auth")} style={s.secondaryBtn}>
+            <Text style={s.secondaryText}>View Active Pools</Text>
+          </Pressable>
+        </View>
+
+        {/* Stats */}
+        <View style={s.statsRow}>
+          {stats.map((stat) => (
+            <View key={stat.label} style={s.statItem}>
+              <Text style={s.statValue}>{stat.value}</Text>
+              <Text style={s.statLabel}>{stat.label}</Text>
+            </View>
+          ))}
         </View>
 
         {/* How It Works */}
@@ -66,7 +94,7 @@ export default function LandingPage() {
             <View key={step.title}>
               <View style={s.stepRow}>
                 <LinearGradient
-                  colors={[C.brandFire, C.brandGold]}
+                  colors={[C.primary, '#4ADE80']}
                   style={s.stepIcon}
                 >
                   <Ionicons name={step.icon} size={28} color={C.white} />
@@ -93,28 +121,49 @@ export default function LandingPage() {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bgPrimary },
   scroll: { paddingHorizontal: Spacing.xl, paddingBottom: 40 },
-  hero: { alignItems: "center", paddingTop: 60, paddingBottom: 40 },
-  logo: { fontSize: 64, marginBottom: 8 },
-  title: {
-    fontSize: 36,
+
+  badgeRow: { alignItems: 'center', paddingTop: 40, marginBottom: 24 },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.primaryDim,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.primary,
+  },
+  liveText: { fontSize: 13, fontWeight: '600', color: C.primary },
+
+  hero: { alignItems: "center", paddingBottom: 32 },
+  heroLine: {
+    fontSize: 40,
     fontWeight: "800",
-    color: C.brandFire,
-    letterSpacing: 2,
-    marginBottom: 12,
+    color: C.textPrimary,
+    letterSpacing: -1,
+    lineHeight: 48,
+  },
+  heroLineGreen: {
+    fontSize: 40,
+    fontWeight: "800",
+    color: C.primary,
+    letterSpacing: -1,
+    lineHeight: 48,
+    marginBottom: 20,
   },
   subtitle: {
-    fontSize: 18,
+    fontSize: 16,
     color: C.textSecondary,
     textAlign: "center",
-    lineHeight: 26,
-    marginBottom: 16,
-  },
-  desc: {
-    fontSize: 14,
-    color: C.textMuted,
-    textAlign: "center",
-    lineHeight: 22,
-    paddingHorizontal: 20,
+    lineHeight: 24,
+    paddingHorizontal: 12,
     marginBottom: 32,
   },
   ctaBtn: {
@@ -124,10 +173,36 @@ const s = StyleSheet.create({
     gap: 10,
     paddingVertical: 18,
     paddingHorizontal: 48,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   ctaText: { fontSize: 18, fontWeight: "700", color: C.white },
-  section: { paddingTop: 24, paddingBottom: 32 },
+  secondaryBtn: {
+    marginTop: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: Radius.lg,
+    backgroundColor: C.bgSurface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  secondaryText: { fontSize: 16, fontWeight: '600', color: C.textPrimary },
+
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+    paddingHorizontal: 4,
+  },
+  statItem: { alignItems: 'center', flex: 1 },
+  statValue: { fontSize: 22, fontWeight: '800', color: C.textPrimary },
+  statLabel: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+
+  section: { paddingTop: 8, paddingBottom: 32 },
   sectionTitle: {
     fontSize: 22,
     fontWeight: "700",

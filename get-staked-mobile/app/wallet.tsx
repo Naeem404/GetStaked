@@ -92,11 +92,11 @@ export default function WalletScreen() {
         {walletAddress ? (
           <View style={s.connectedCard}>
             <LinearGradient
-              colors={['#1a1a2e', '#16213e']}
+              colors={[C.bgSurface, C.bgElevated]}
               style={s.connectedGradient}
             >
               <View style={s.connectedHeader}>
-                <Ionicons name="wallet" size={24} color={C.brandGold} />
+                <Ionicons name="wallet" size={24} color={C.accent} />
                 <Text style={s.connectedLabel}>Wallet Connected</Text>
                 {isConnected && (
                   <View style={s.phantomBadge}>
@@ -110,7 +110,7 @@ export default function WalletScreen() {
               <View style={s.balanceRow}>
                 <Text style={s.balanceLabel}>Balance</Text>
                 {loadingBalance ? (
-                  <ActivityIndicator size="small" color={C.brandGold} />
+                  <ActivityIndicator size="small" color={C.accent} />
                 ) : (
                   <Text style={s.balanceValue}>
                     {balance !== null ? `${balance.toFixed(4)} SOL` : '\u2014'}
@@ -143,10 +143,10 @@ export default function WalletScreen() {
           <>
             {/* Info */}
             <View style={s.infoCard}>
-              <Ionicons name="wallet-outline" size={48} color={C.brandFire} />
+              <Ionicons name="shield-checkmark" size={32} color={C.primary} />
               <Text style={s.infoTitle}>Connect Your Wallet</Text>
               <Text style={s.infoDesc}>
-                Connect your Phantom wallet to stake SOL in pools, earn rewards, and manage your funds on-chain.
+                Link a Solana wallet to stake SOL in pools, earn rewards, and manage your funds securely on-chain.
               </Text>
             </View>
 
@@ -241,8 +241,8 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   balanceLabel: { fontSize: 14, color: C.textMuted },
-  balanceValue: { fontSize: 24, fontWeight: '800', color: C.brandGold },
-  connectedActions: { flexDirection: 'row', gap: 8 },
+  balanceValue: { fontSize: 24, fontWeight: '800', color: C.accent },
+  connectedActions: { flexDirection: 'row', gap: 12 },
   refreshBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderRadius: Radius.md,
@@ -257,7 +257,7 @@ const s = StyleSheet.create({
   disconnectBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,45,85,0.08)', borderWidth: 1, borderColor: C.dangerDim,
+    backgroundColor: C.dangerDim, borderWidth: 1, borderColor: C.dangerDim,
   },
   disconnectText: { fontSize: 12, color: C.danger, fontWeight: '600' },
 
