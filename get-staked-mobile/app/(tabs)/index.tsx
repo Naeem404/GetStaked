@@ -13,7 +13,7 @@ import { purchaseLifeline, activateLifeline, requestFriendVouch } from "@/hooks/
 import { useFriendIds } from "@/hooks/use-friends";
 import { getDemoBalance } from "@/lib/demo-wallet";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, Camera } from "expo-camera";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -34,7 +34,9 @@ export default function CameraDashboard() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("23:59:59");
   const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [permission, requestPermission] = useCameraPermissions();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(true);
   const cameraRef = useRef<CameraView>(null);
   const { pendingProofs, refetch: refetchProofs } = usePendingProofs();
   const [showPoolSheet, setShowPoolSheet] = useState(false);
@@ -60,28 +62,45 @@ export default function CameraDashboard() {
     }, [])
   );
 
-  // Request camera permission on mount (only once)
+  // Request camera permission immediately on mount
   useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) {
-      requestPermission();
-    }
-  }, [permission?.granted]);
+    (async () => {
+      try {
+        const { status } = await Camera.requestCameraPermissionsAsync();
+        setHasPermission(status === 'granted');
+      } catch (e) {
+        console.warn('Camera permission error:', e);
+        setHasPermission(false);
+      }
+    })();
+  }, []);
+
+  // Track tab focus to activate/deactivate camera
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, [])
+  );
 
   const handleGrantCamera = async () => {
-    if (!permission) {
-      await requestPermission();
-    } else if (permission.canAskAgain) {
-      await requestPermission();
-    } else {
-      // Permission permanently denied — send to app settings
-      Alert.alert(
-        'Camera Permission Required',
-        'Camera access was denied. Please enable it in your device settings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() },
-        ]
-      );
+    try {
+      const { status, canAskAgain } = await Camera.requestCameraPermissionsAsync();
+      if (status === 'granted') {
+        setHasPermission(true);
+      } else if (!canAskAgain) {
+        // Permission permanently denied — send to app settings
+        Alert.alert(
+          'Camera Permission Required',
+          'Camera access was denied. Please enable it in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+    } catch (e) {
+      console.warn('Permission request failed:', e);
     }
   };
 
@@ -153,19 +172,32 @@ export default function CameraDashboard() {
       {/* Full-screen live camera or captured preview */}
       {imageUri ? (
         <Image source={{ uri: imageUri }} style={d.cameraBackground} resizeMode="cover" />
-      ) : permission?.granted ? (
+      ) : hasPermission === null ? (
+        <View style={[d.cameraBackground, d.cameraPlaceholder]}>
+          <ActivityIndicator size="large" color={C.primary} />
+          <Text style={d.permText}>Starting camera...</Text>
+        </View>
+      ) : hasPermission ? (
         <CameraView
           ref={cameraRef}
           style={d.cameraBackground}
           facing={facing}
+          active={isFocused}
+          onMountError={(e) => {
+            console.warn('Camera mount error:', e);
+            setCameraError(e.message);
+          }}
         />
       ) : (
         <View style={[d.cameraBackground, d.cameraPlaceholder]}>
           <Ionicons name="camera" size={48} color="rgba(255,255,255,0.15)" />
-          <Text style={d.permText}>Tap to enable camera</Text>
+          <Text style={d.permText}>Camera access is needed to submit proofs</Text>
           <Pressable onPress={handleGrantCamera} style={d.permBtn}>
             <Text style={d.permBtnText}>Grant Camera Access</Text>
           </Pressable>
+          {cameraError && (
+            <Text style={[d.permText, { fontSize: 11, marginTop: 8 }]}>Error: {cameraError}</Text>
+          )}
         </View>
       )}
 
