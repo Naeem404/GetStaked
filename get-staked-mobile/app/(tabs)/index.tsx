@@ -323,13 +323,23 @@ export default function CameraDashboard() {
                 if (result.error) {
                   Alert.alert('Error', result.error.message);
                 } else {
+                  const submittedPoolId = selectedPoolId;
                   setShowPoolSheet(false);
                   setImageUri(null);
                   setImageBase64(null);
                   setSelectedPoolId(null);
                   setSelectedMemberId(null);
+
+                  // Immediate refetch + delayed refetch to ensure DB writes are committed
                   refetchProofs();
                   refetchStats();
+                  refetchMyPools();
+                  // Second refetch after a short delay to catch any DB propagation
+                  setTimeout(() => {
+                    refetchProofs();
+                    refetchStats();
+                    refetchMyPools();
+                  }, 1500);
 
                   // Show AI verification result
                   if (result.verification) {

@@ -7,8 +7,8 @@ import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
 import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
 import { useRecentActivity } from "@/hooks/use-proofs";
 import { useMyPools } from "@/hooks/use-pools";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useState, useCallback } from "react";
 
 
 
@@ -90,11 +90,20 @@ type TabType = 'leaderboard' | 'stats';
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('stats');
-  const { stats, loading: statsLoading } = useUserStats();
-  const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
+  const { stats, loading: statsLoading, refetch: refetchStats } = useUserStats();
+  const { days: habitDays, loading: gridLoading, refetch: refetchGrid } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
-  const { pools: myPools, loading: poolsLoading } = useMyPools();
+  const { pools: myPools, loading: poolsLoading, refetch: refetchPools } = useMyPools();
   const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
+
+  // Refetch all data when tab is focused (ensures dynamic updates after proof submission)
+  useFocusEffect(
+    useCallback(() => {
+      refetchStats();
+      refetchGrid();
+      refetchPools();
+    }, [])
+  );
 
   // Podium order: 2nd, 1st, 3rd
   const podiumOrder = [top3Leaderboard[1], top3Leaderboard[0], top3Leaderboard[2]];

@@ -25,18 +25,18 @@ function generateEmptyDays(numDays: number): HabitDay[] {
 
 function getDayBg(day: HabitDay) {
   if (day.count < 0) return C.bgHover;
-  if (day.isToday && day.count === 0) return C.transparent;
-  if (day.count === 0) return C.transparent;
-  if (day.count === 1) return "rgba(34,197,94,0.20)";
-  if (day.count === 2) return "rgba(34,197,94,0.45)";
+  if (day.count === 0) return 'rgba(255,255,255,0.04)';
+  if (day.count === 1) return "rgba(34,197,94,0.25)";
+  if (day.count === 2) return "rgba(34,197,94,0.50)";
+  if (day.count === 3) return "rgba(34,197,94,0.75)";
   return C.primary;
 }
 
 function getDayBorder(day: HabitDay) {
   if (day.isToday && day.count === 0)
-    return { borderWidth: 1.5, borderColor: C.white };
-  if (day.count === 0 && day.count >= 0)
-    return { borderWidth: 1, borderColor: C.dangerDim, borderStyle: "dashed" as const };
+    return { borderWidth: 1.5, borderColor: 'rgba(34,197,94,0.5)' };
+  if (day.isToday && day.count > 0)
+    return { borderWidth: 1.5, borderColor: C.primary };
   return {};
 }
 
@@ -103,9 +103,9 @@ export function HabitGridLegend() {
   return (
     <View style={s.legend}>
       <Text style={s.legendText}>Less</Text>
-      <View style={[s.legendSq, { backgroundColor: C.transparent, borderWidth: 1, borderColor: C.dangerDim }]} />
-      <View style={[s.legendSq, { backgroundColor: "rgba(34,197,94,0.20)" }]} />
-      <View style={[s.legendSq, { backgroundColor: "rgba(34,197,94,0.45)" }]} />
+      <View style={[s.legendSq, { backgroundColor: 'rgba(255,255,255,0.04)' }]} />
+      <View style={[s.legendSq, { backgroundColor: "rgba(34,197,94,0.25)" }]} />
+      <View style={[s.legendSq, { backgroundColor: "rgba(34,197,94,0.50)" }]} />
       <View style={[s.legendSq, { backgroundColor: C.primary }]} />
       <Text style={s.legendText}>More</Text>
     </View>

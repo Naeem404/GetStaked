@@ -55,14 +55,28 @@ export function usePendingProofs() {
 
       if (memError) throw memError;
 
+      // Also fetch today's submitted proofs to double-check
+      const { data: todaysProofs } = await supabase
+        .from('proofs')
+        .select('pool_id')
+        .eq('user_id', user.id)
+        .gte('created_at', `${today}T00:00:00`)
+        .lte('created_at', `${today}T23:59:59`);
+
+      const submittedPoolIds = new Set((todaysProofs || []).map(p => p.pool_id));
+
       const pending: PendingProof[] = [];
 
       for (const membership of memberships || []) {
         const pool = (membership as any).pools;
-        if (!pool || (pool.status !== 'active' && pool.status !== 'waiting')) continue;
+        // Only active pools need daily proofs (not waiting/completed/failed)
+        if (!pool || pool.status !== 'active') continue;
 
-        // Check if proof already submitted today
-        if (membership.last_proof_date === today) continue;
+        // Check if proof already submitted today (check both last_proof_date AND proofs table)
+        const lastProofDate = membership.last_proof_date
+          ? String(membership.last_proof_date).split('T')[0]
+          : null;
+        if (lastProofDate === today || submittedPoolIds.has(membership.pool_id)) continue;
 
         // Calculate urgency
         const endsAt = pool.ends_at ? new Date(pool.ends_at) : null;
