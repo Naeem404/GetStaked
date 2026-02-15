@@ -12,7 +12,7 @@ import { supabase, SUPABASE_URL } from '@/lib/supabase';
 // 1. Sign up / log in at https://phantom.com/portal/
 // 2. Create an app → expand it → click "Set Up"
 // 3. Copy the App ID and paste it below
-export const PHANTOM_APP_ID = 'your-app-id-here'; // TODO: Replace with real App ID from Phantom Portal
+export const PHANTOM_APP_ID = '0937f4f9-56ea-48c0-8697-973210b43b4f';
 
 /**
  * Save wallet connection to Supabase profile.
