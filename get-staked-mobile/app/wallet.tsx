@@ -49,8 +49,15 @@ export default function WalletScreen() {
   }
 
   const handleConnect = useCallback(() => {
-    modal.open();
-  }, [modal]);
+    console.log('[Wallet] Opening Phantom modal...', { isConnected, appId: '0937f4f9...' });
+    try {
+      modal.open();
+      console.log('[Wallet] modal.open() called successfully');
+    } catch (err: any) {
+      console.error('[Wallet] modal.open() error:', err);
+      Alert.alert('Error', `Failed to open Phantom: ${err?.message || 'Unknown error'}`);
+    }
+  }, [modal, isConnected]);
 
   async function handleDisconnect() {
     if (!user) return;
