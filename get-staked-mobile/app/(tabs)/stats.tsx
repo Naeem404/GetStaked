@@ -6,6 +6,8 @@ import { C, Spacing, Radius } from "@/constants/theme";
 import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
 import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
 import { useRecentActivity } from "@/hooks/use-proofs";
+import { useMyPools } from "@/hooks/use-pools";
+import { router } from "expo-router";
 import { useState } from "react";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -22,34 +24,50 @@ const AVATAR_COLORS = [
   ['#D980FA', '#BE2EDD'],
 ];
 
-const leaderboardData = [
-  { rank: 1, name: "Jordyn Kenter", score: 96239, avatar: "J" },
-  { rank: 2, name: "Anna Bator", score: 84397, avatar: "A" },
-  { rank: 3, name: "Carl Oliver", score: 83199, avatar: "C" },
-  { rank: 4, name: "Davis Curtis", score: 80007, avatar: "D" },
-  { rank: 5, name: "Nisna Ohad", score: 70120, avatar: "N" },
-  { rank: 6, name: "Makaena George", score: 71087, avatar: "M" },
-  { rank: 7, name: "Kenna Bettta", score: 69439, avatar: "K" },
-  { rank: 8, name: "Marth Culep", score: 66800, avatar: "R" },
-  { rank: 9, name: "Zein Das", score: 56909, avatar: "Z" },
+// Fallback mock pools for leaderboard when no real data
+const mockPoolsForLeaderboard = [
+  {
+    id: 'mock-1',
+    name: 'Morning Runs',
+    stake_amount: 0.1,
+    duration_days: 7,
+    status: 'active',
+    current_players: 5,
+    max_players: 8,
+    pool_members: [
+      { id: '1', current_streak: 4, status: 'active', profiles: { display_name: 'Alex', avatar_url: null } },
+      { id: '2', current_streak: 2, status: 'active', profiles: { display_name: 'Sarah', avatar_url: null } },
+      { id: '3', current_streak: 3, status: 'active', profiles: { display_name: 'Mike', avatar_url: null } },
+      { id: '4', current_streak: 5, status: 'active', profiles: { display_name: 'Priya', avatar_url: null } },
+      { id: '5', current_streak: 1, status: 'active', profiles: { display_name: 'Jordan', avatar_url: null } },
+    ],
+  },
+  {
+    id: 'mock-2',
+    name: 'No Sugar Challenge',
+    stake_amount: 0.2,
+    duration_days: 14,
+    status: 'active',
+    current_players: 3,
+    max_players: 5,
+    pool_members: [
+      { id: '6', current_streak: 7, status: 'active', profiles: { display_name: 'Lena', avatar_url: null } },
+      { id: '7', current_streak: 3, status: 'active', profiles: { display_name: 'Raj', avatar_url: null } },
+      { id: '8', current_streak: 5, status: 'active', profiles: { display_name: 'Tina', avatar_url: null } },
+    ],
+  },
 ];
 
 type TabType = 'leaderboard' | 'stats';
 
 export default function LeaderboardScreen() {
-  const [activeTab, setActiveTab] = useState<TabType>('leaderboard');
+  const [activeTab, setActiveTab] = useState<TabType>('stats');
   const { stats, loading: statsLoading } = useUserStats();
   const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
+  const { pools: myPools, loading: poolsLoading } = useMyPools();
 
-  // Podium order: 2nd, 1st, 3rd
-  const podiumOrder = [leaderboardData[1], leaderboardData[0], leaderboardData[2]];
-
-  const getMedalEmoji = (rank: number) => {
-    if (rank === 1) return '🥇';
-    if (rank === 2) return '🥈';
-    return '🥉';
-  };
+  const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
 
   const getAvatarColors = (index: number): [string, string] => {
     const c = AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -68,15 +86,8 @@ export default function LeaderboardScreen() {
         </Pressable>
       </View>
 
-      {/* Tab toggle */}
+      {/* Tab toggle — My Stats first, Leaderboard second */}
       <View style={st.tabRow}>
-        <Pressable
-          onPress={() => setActiveTab('leaderboard')}
-          style={[st.tab, activeTab === 'leaderboard' && st.tabActive]}
-        >
-          <Ionicons name="trophy" size={16} color={activeTab === 'leaderboard' ? '#FFD700' : C.textMuted} />
-          <Text style={[st.tabText, activeTab === 'leaderboard' && st.tabTextActive]}>Leaderboard</Text>
-        </Pressable>
         <Pressable
           onPress={() => setActiveTab('stats')}
           style={[st.tab, activeTab === 'stats' && st.tabActive]}
@@ -84,112 +95,179 @@ export default function LeaderboardScreen() {
           <Ionicons name="stats-chart" size={16} color={activeTab === 'stats' ? C.primary : C.textMuted} />
           <Text style={[st.tabText, activeTab === 'stats' && st.tabTextActive]}>My Stats</Text>
         </Pressable>
+        <Pressable
+          onPress={() => setActiveTab('leaderboard')}
+          style={[st.tab, activeTab === 'leaderboard' && st.tabActive]}
+        >
+          <Ionicons name="trophy" size={16} color={activeTab === 'leaderboard' ? '#FFD700' : C.textMuted} />
+          <Text style={[st.tabText, activeTab === 'leaderboard' && st.tabTextActive]}>Leaderboard</Text>
+        </Pressable>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
         {activeTab === 'leaderboard' ? (
           <>
-            {/* ── Top 3 Podium ── */}
-            <LinearGradient
-              colors={['#1A1035', '#0D0B1A', '#0A0A0A']}
-              style={st.podiumSection}
-            >
-              <View style={st.podiumRow}>
-                {podiumOrder.map((leader, i) => {
-                  const isFirst = leader.rank === 1;
-                  const avatarSize = isFirst ? 80 : 60;
-                  const medalSize = isFirst ? 28 : 22;
+            {/* ── Pool-based Leaderboard ── */}
+            {poolsLoading ? (
+              <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
+            ) : (
+              <View style={st.poolLeaderboardList}>
+                {displayPools.map((pool: any, poolIdx: number) => {
+                  const members = (pool.pool_members || [])
+                    .filter((m: any) => m.status === 'active')
+                    .sort((a: any, b: any) => (b.current_streak ?? 0) - (a.current_streak ?? 0));
 
                   return (
-                    <View
-                      key={leader.rank}
-                      style={[st.podiumItem, isFirst && st.podiumItemFirst]}
-                    >
-                      {/* Avatar with gradient border */}
-                      <View style={[
-                        st.avatarRing,
-                        {
-                          width: avatarSize + 8,
-                          height: avatarSize + 8,
-                          borderRadius: (avatarSize + 8) / 2,
-                          borderColor: isFirst ? '#FFD700' : leader.rank === 2 ? '#C0C0C0' : '#CD7F32',
-                        },
-                      ]}>
-                        <LinearGradient
-                          colors={getAvatarColors(leader.rank - 1)}
-                          style={[
-                            st.podiumAvatar,
-                            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
-                          ]}
-                        >
-                          <Text style={[st.podiumAvatarText, { fontSize: isFirst ? 28 : 22 }]}>
-                            {leader.avatar}
+                    <View key={pool.id} style={st.poolLeaderCard}>
+                      {/* Pool header */}
+                      <View style={st.poolLeaderHeader}>
+                        <View>
+                          <Text style={st.poolLeaderName}>{pool.name}</Text>
+                          <Text style={st.poolLeaderMeta}>
+                            Stake: {pool.stake_amount} SOL • Duration: {pool.duration_days} Days •{' '}
+                            <Text style={{ color: C.primary, fontWeight: '700' }}>Active</Text>
                           </Text>
-                        </LinearGradient>
-                        {/* Medal badge */}
-                        <View style={[st.medalBadge, { width: medalSize, height: medalSize, borderRadius: medalSize / 2 }]}>
-                          <Text style={{ fontSize: isFirst ? 16 : 12 }}>{getMedalEmoji(leader.rank)}</Text>
                         </View>
                       </View>
 
-                      {/* Name */}
-                      <Text style={[st.podiumName, isFirst && st.podiumNameFirst]} numberOfLines={1}>
-                        {leader.name}
-                      </Text>
+                      {/* Leaderboard section */}
+                      <View style={st.poolLeaderSection}>
+                        <Text style={st.poolLeaderSectionTitle}>Leaderboard</Text>
 
-                      {/* Score */}
-                      <View style={st.podiumScoreRow}>
-                        <Ionicons name="flame" size={14} color="#FFD700" />
-                        <Text style={st.podiumScore}>
-                          {leader.score.toLocaleString()}
-                        </Text>
+                        {/* Avatar row */}
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={st.poolAvatarRow}
+                        >
+                          {members.map((member: any, mIdx: number) => {
+                            const name = member.profiles?.display_name || 'User';
+                            const streak = member.current_streak ?? 0;
+                            const colors = getAvatarColors(mIdx);
+                            const verified = streak > 0;
+
+                            return (
+                              <View key={member.id} style={st.poolAvatarItem}>
+                                <View style={st.poolAvatarWrap}>
+                                  <LinearGradient
+                                    colors={colors}
+                                    style={st.poolAvatarRing}
+                                  >
+                                    <View style={st.poolAvatarInner}>
+                                      <Text style={st.poolAvatarLetter}>
+                                        {name[0]?.toUpperCase() || '?'}
+                                      </Text>
+                                    </View>
+                                  </LinearGradient>
+                                  {verified && (
+                                    <View style={st.poolVerifiedBadge}>
+                                      <Ionicons name="checkmark-circle" size={16} color={C.primary} />
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={st.poolStreakLabel}>{streak} Streak</Text>
+                              </View>
+                            );
+                          })}
+                        </ScrollView>
+
+                        {/* Submit Proof button */}
+                        <Pressable
+                          onPress={() => router.push('/(tabs)')}
+                          style={st.poolSubmitBtn}
+                        >
+                          <LinearGradient
+                            colors={[C.primary, '#4ADE80']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={st.poolSubmitGrad}
+                          >
+                            <Text style={st.poolSubmitText}>Submit Proof</Text>
+                          </LinearGradient>
+                        </Pressable>
                       </View>
                     </View>
                   );
                 })}
               </View>
-            </LinearGradient>
-
-            {/* ── Rankings List ── */}
-            <View style={st.rankList}>
-              {leaderboardData.slice(3).map((leader, idx) => (
-                <View key={leader.rank} style={st.rankRow}>
-                  {/* Avatar */}
-                  <LinearGradient
-                    colors={getAvatarColors(leader.rank - 1)}
-                    style={st.rankAvatar}
-                  >
-                    <Text style={st.rankAvatarText}>{leader.avatar}</Text>
-                  </LinearGradient>
-
-                  {/* Name + Score */}
-                  <View style={st.rankInfo}>
-                    <Text style={st.rankName}>{leader.name}</Text>
-                    <View style={st.rankScoreRow}>
-                      <Ionicons name="flame" size={12} color="#FFD700" />
-                      <Text style={st.rankScoreText}>
-                        {leader.score.toLocaleString()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Rank badge */}
-                  <View style={st.rankBadge}>
-                    <Text style={st.rankBadgeText}>{leader.rank}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
+            )}
           </>
         ) : (
           <>
-            {/* ── Stats: Colorful Cards Grid ── */}
+            {/* ── Stats ── */}
             {statsLoading ? (
               <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
             ) : (
               <>
-                {/* Progress Card - Full Width - Yellow */}
                 <View style={st.statsContainer}>
+                  {/* ── Streak Dashboard FIRST (main feature) ── */}
+                  <View style={st.streakDashboard}>
+                    {/* STREAK DASHBOARD badge */}
+                    <View style={st.streakBadgeRow}>
+                      <View style={st.streakBadge}>
+                        <Text style={st.streakBadgeText}>STREAK DASHBOARD</Text>
+                      </View>
+                    </View>
+
+                    {/* Title */}
+                    <Text style={st.streakTitle}>Visualize your discipline</Text>
+                    <Text style={st.streakSubtitle}>
+                      Every green square is money earned. Every gap is money lost.
+                    </Text>
+
+                    {/* Stats row */}
+                    <View style={st.streakStatsCard}>
+                      <View style={st.streakStatsRow}>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="flame" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>CURRENT STREAK</Text>
+                          <Text style={st.streakStatValue}>{stats.currentStreak ?? 0} days</Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="calendar" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>TOTAL DAYS</Text>
+                          <Text style={st.streakStatValue}>
+                            {stats.totalDays ?? 0}/91
+                          </Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="trending-up" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>COMPLETION</Text>
+                          <Text style={st.streakStatValue}>{stats.completionRate ?? 0}%</Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="logo-bitcoin" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>EARNINGS</Text>
+                          <Text style={[st.streakStatValue, { color: C.primary }]}>
+                            +{stats.totalSolEarned?.toFixed(1) ?? '0.0'} SOL
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Heatmap grid */}
+                      <View style={st.heatmapContainer}>
+                        {gridLoading ? (
+                          <ActivityIndicator color={C.primary} />
+                        ) : (
+                          <>
+                            <HabitGrid variant="full" data={habitDays} />
+                            <HabitGridLegend />
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* ── Colorful Stats Cards ── */}
+                  {/* Progress Card - Full Width - Yellow */}
                   <View style={[st.statCardFull, { backgroundColor: '#FFF3CD' }]}>
                     <View style={st.statCardHeader}>
                       <Text style={[st.statCardLabel, { color: '#856404' }]}>PROGRESS</Text>
@@ -288,72 +366,6 @@ export default function LeaderboardScreen() {
                     <Ionicons name="add" size={18} color={C.textSecondary} />
                     <Text style={st.addMoreText}>Add more</Text>
                   </Pressable>
-
-                  {/* ── Streak Dashboard (Reference Image 2) ── */}
-                  <View style={st.streakDashboard}>
-                    {/* STREAK DASHBOARD badge */}
-                    <View style={st.streakBadgeRow}>
-                      <View style={st.streakBadge}>
-                        <Text style={st.streakBadgeText}>STREAK DASHBOARD</Text>
-                      </View>
-                    </View>
-
-                    {/* Title */}
-                    <Text style={st.streakTitle}>Visualize your discipline</Text>
-                    <Text style={st.streakSubtitle}>
-                      Every green square is money earned. Every gap is money lost.
-                    </Text>
-
-                    {/* Stats row */}
-                    <View style={st.streakStatsCard}>
-                      <View style={st.streakStatsRow}>
-                        <View style={st.streakStatItem}>
-                          <View style={st.streakStatIconWrap}>
-                            <Ionicons name="flame" size={16} color={C.primary} />
-                          </View>
-                          <Text style={st.streakStatLabel}>CURRENT STREAK</Text>
-                          <Text style={st.streakStatValue}>{stats.currentStreak ?? 0} days</Text>
-                        </View>
-                        <View style={st.streakStatItem}>
-                          <View style={st.streakStatIconWrap}>
-                            <Ionicons name="calendar" size={16} color={C.primary} />
-                          </View>
-                          <Text style={st.streakStatLabel}>TOTAL DAYS</Text>
-                          <Text style={st.streakStatValue}>
-                            {stats.totalDays ?? 0}/91
-                          </Text>
-                        </View>
-                        <View style={st.streakStatItem}>
-                          <View style={st.streakStatIconWrap}>
-                            <Ionicons name="trending-up" size={16} color={C.primary} />
-                          </View>
-                          <Text style={st.streakStatLabel}>COMPLETION</Text>
-                          <Text style={st.streakStatValue}>{stats.completionRate ?? 0}%</Text>
-                        </View>
-                        <View style={st.streakStatItem}>
-                          <View style={st.streakStatIconWrap}>
-                            <Ionicons name="logo-bitcoin" size={16} color={C.primary} />
-                          </View>
-                          <Text style={st.streakStatLabel}>EARNINGS</Text>
-                          <Text style={[st.streakStatValue, { color: C.primary }]}>
-                            +{stats.totalSolEarned?.toFixed(1) ?? '0.0'} SOL
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Heatmap grid */}
-                      <View style={st.heatmapContainer}>
-                        {gridLoading ? (
-                          <ActivityIndicator color={C.primary} />
-                        ) : (
-                          <>
-                            <HabitGrid variant="full" data={habitDays} />
-                            <HabitGridLegend />
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  </View>
                 </View>
               </>
             )}
@@ -409,113 +421,112 @@ const st = StyleSheet.create({
   tabText: { fontSize: 14, fontWeight: "600", color: C.textMuted },
   tabTextActive: { color: C.textPrimary },
 
-  // ── Podium Section ──
-  podiumSection: {
-    paddingTop: 20,
-    paddingBottom: 28,
-    marginBottom: 4,
+  // ── Pool-based Leaderboard ──
+  poolLeaderboardList: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.lg,
   },
-  podiumRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    gap: 6,
-  },
-  podiumItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingTop: 12,
-  },
-  podiumItemFirst: {
-    marginTop: -16,
-  },
-  avatarRing: {
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  podiumAvatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  podiumAvatarText: { fontWeight: '800', color: C.white },
-  medalBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: C.bgPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: C.bgPrimary,
-  },
-  podiumName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  podiumNameFirst: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: C.white,
-  },
-  podiumScoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  podiumScore: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFD700',
-  },
-
-  // ── Rankings List ──
-  rankList: {
-    marginHorizontal: Spacing.lg,
+  poolLeaderCard: {
     backgroundColor: C.bgSurface,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: C.border,
     overflow: 'hidden',
-    marginBottom: Spacing.xl,
   },
-  rankRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  poolLeaderHeader: {
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.border,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
-  rankAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  poolLeaderName: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: C.textPrimary,
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
-  rankAvatarText: { fontSize: 16, fontWeight: '800', color: C.white },
-  rankInfo: { flex: 1 },
-  rankName: { fontSize: 15, fontWeight: '600', color: C.textPrimary, marginBottom: 2 },
-  rankScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  rankScoreText: { fontSize: 13, fontWeight: '700', color: '#FFD700' },
-  rankBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  poolLeaderMeta: {
+    fontSize: 13,
+    color: C.textSecondary,
+    lineHeight: 18,
+  },
+  poolLeaderSection: {
     backgroundColor: C.bgElevated,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    padding: Spacing.lg,
   },
-  rankBadgeText: { fontSize: 13, fontWeight: '700', color: C.textSecondary },
+  poolLeaderSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: C.textPrimary,
+    marginBottom: Spacing.lg,
+  },
+  poolAvatarRow: {
+    gap: 20,
+    paddingBottom: Spacing.lg,
+  },
+  poolAvatarItem: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  poolAvatarWrap: {
+    position: 'relative',
+  },
+  poolAvatarRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  poolAvatarInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: C.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  poolAvatarLetter: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: C.white,
+  },
+  poolVerifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: C.bgPrimary,
+    borderRadius: 10,
+    padding: 1,
+  },
+  poolStreakLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.textSecondary,
+  },
+  poolSubmitBtn: {
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  poolSubmitGrad: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: Radius.lg,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  poolSubmitText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: C.white,
+    letterSpacing: 0.5,
+  },
 
   // ── Stats Cards ──
   statsContainer: {
@@ -621,7 +632,7 @@ const st = StyleSheet.create({
 
   // ── Streak Dashboard ──
   streakDashboard: {
-    marginTop: Spacing.md,
+    marginBottom: Spacing.xl,
   },
   streakBadgeRow: {
     alignItems: 'center',
