@@ -1,132 +1,56 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert, Linking, ActivityIndicator, Platform } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useModal, useAccounts, useSolana, useDisconnect } from '@phantom/react-native-sdk';
 import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
-import {
-  connectPhantom, connectSolflare, isWalletInstalled,
-  saveWalletToProfile, getWalletBalance, getWalletStoreUrl,
-  WalletProvider,
-} from '@/lib/wallet';
-
-const WALLETS: { key: WalletProvider; name: string; icon: string; color: string; description: string }[] = [
-  {
-    key: 'phantom',
-    name: 'Phantom',
-    icon: '👻',
-    color: '#AB9FF2',
-    description: 'Most popular Solana wallet',
-  },
-  {
-    key: 'solflare',
-    name: 'Solflare',
-    icon: '🔆',
-    color: '#FC7227',
-    description: 'Feature-rich Solana wallet',
-  },
-];
+import { saveWalletToProfile, removeWalletFromProfile, getWalletBalance, getSolanaAddress } from '@/lib/wallet';
 
 export default function WalletScreen() {
   const { user, profile, refreshProfile } = useAuth();
-  const [connecting, setConnecting] = useState<WalletProvider | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
-  const [installed, setInstalled] = useState<Record<string, boolean>>({});
 
-  const walletAddress = profile?.wallet_address;
+  // Phantom SDK hooks
+  const modal = useModal();
+  const { isConnected, addresses } = useAccounts();
+  const { disconnect, isDisconnecting } = useDisconnect();
+
+  // Derive the Solana address from Phantom SDK
+  const phantomSolAddress = isConnected ? getSolanaAddress(addresses) : null;
+  // Use Phantom SDK address if connected, otherwise fall back to profile
+  const walletAddress = phantomSolAddress || profile?.wallet_address;
+
+  // Sync Phantom SDK connection to Supabase profile
+  useEffect(() => {
+    if (phantomSolAddress && user && phantomSolAddress !== profile?.wallet_address) {
+      saveWalletToProfile(user.id, phantomSolAddress).then(() => {
+        refreshProfile();
+      });
+    }
+  }, [phantomSolAddress, user]);
 
   useEffect(() => {
-    checkInstalledWallets();
-    if (walletAddress) fetchBalance();
+    if (walletAddress) fetchBalance(walletAddress);
   }, [walletAddress]);
 
-  async function checkInstalledWallets() {
-    const phantomInstalled = await isWalletInstalled('phantom');
-    const solflareInstalled = await isWalletInstalled('solflare');
-    setInstalled({ phantom: phantomInstalled, solflare: solflareInstalled });
-  }
-
-  async function fetchBalance() {
-    if (!walletAddress) return;
+  async function fetchBalance(addr: string) {
+    if (!addr) return;
     setLoadingBalance(true);
     try {
-      const bal = await getWalletBalance(walletAddress);
+      const bal = await getWalletBalance(addr);
       setBalance(bal);
     } finally {
       setLoadingBalance(false);
     }
   }
 
-  async function handleConnect(provider: WalletProvider) {
-    if (!user) return;
-    setConnecting(provider);
-
-    try {
-      let result: string | null = null;
-      if (provider === 'phantom') {
-        result = await connectPhantom();
-      } else if (provider === 'solflare') {
-        result = await connectSolflare();
-      }
-
-      if (result === 'connecting') {
-        // The wallet app was opened. The actual connection will come back via deep link.
-        // For now, show a manual input option as fallback
-        Alert.alert(
-          'Wallet Opened',
-          'After approving the connection in your wallet app, return here. If automatic connection doesn\'t work, you can paste your wallet address manually.',
-          [
-            { text: 'Paste Address', onPress: () => promptManualAddress(provider) },
-            { text: 'OK', style: 'cancel' },
-          ]
-        );
-      } else if (result === null) {
-        // Wallet not installed
-        Alert.alert(
-          `${provider === 'phantom' ? 'Phantom' : 'Solflare'} Not Found`,
-          'Would you like to install it?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Install', onPress: () => Linking.openURL(getWalletStoreUrl(provider)) },
-          ]
-        );
-      }
-    } finally {
-      setConnecting(null);
-    }
-  }
-
-  function promptManualAddress(provider: WalletProvider) {
-    // Alert.prompt is iOS-only; on Android show a simple alert
-    if (Platform.OS === 'ios' && Alert.prompt) {
-      Alert.prompt(
-        'Enter Wallet Address',
-        'Paste your Solana wallet address',
-        async (address: string) => {
-          if (address && address.length >= 32 && user) {
-            const { error } = await saveWalletToProfile(user.id, address.trim(), provider);
-            if (error) {
-              Alert.alert('Error', 'Failed to save wallet address');
-            } else {
-              Alert.alert('Connected!', `Wallet ${address.slice(0, 6)}...${address.slice(-4)} linked.`);
-              refreshProfile?.();
-            }
-          } else {
-            Alert.alert('Invalid', 'Please enter a valid Solana wallet address');
-          }
-        },
-        'plain-text'
-      );
-    } else {
-      Alert.alert(
-        'Enter Address',
-        'Please copy your Solana wallet address and use the manual entry below.',
-      );
-    }
-  }
+  const handleConnect = useCallback(() => {
+    modal.open();
+  }, [modal]);
 
   async function handleDisconnect() {
     if (!user) return;
@@ -139,9 +63,14 @@ export default function WalletScreen() {
           text: 'Disconnect',
           style: 'destructive',
           onPress: async () => {
-            await saveWalletToProfile(user.id, '', 'phantom');
-            setBalance(null);
-            refreshProfile?.();
+            try {
+              await disconnect();
+              await removeWalletFromProfile(user.id);
+              setBalance(null);
+              refreshProfile();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to disconnect');
+            }
           },
         },
       ]
@@ -150,116 +79,136 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
-      {/* Header */}
-      <View style={s.header}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={C.textPrimary} />
-        </Pressable>
-        <Text style={s.title}>Wallet</Text>
-      </View>
-
-      {/* Connected Wallet */}
-      {walletAddress ? (
-        <View style={s.connectedCard}>
-          <LinearGradient
-            colors={['#1a1a2e', '#16213e']}
-            style={s.connectedGradient}
-          >
-            <View style={s.connectedHeader}>
-              <Ionicons name="wallet" size={24} color={C.brandGold} />
-              <Text style={s.connectedLabel}>Connected</Text>
-            </View>
-            <Text style={s.walletAddress}>
-              {walletAddress.slice(0, 8)}...{walletAddress.slice(-8)}
-            </Text>
-            <View style={s.balanceRow}>
-              <Text style={s.balanceLabel}>Balance</Text>
-              {loadingBalance ? (
-                <ActivityIndicator size="small" color={C.brandGold} />
-              ) : (
-                <Text style={s.balanceValue}>
-                  {balance !== null ? `${balance.toFixed(4)} SOL` : '—'}
-                </Text>
-              )}
-            </View>
-            <View style={s.connectedActions}>
-              <Pressable style={s.refreshBtn} onPress={fetchBalance}>
-                <Ionicons name="refresh" size={16} color={C.textSecondary} />
-                <Text style={s.refreshText}>Refresh</Text>
-              </Pressable>
-              <Pressable style={s.disconnectBtn} onPress={handleDisconnect}>
-                <Ionicons name="unlink" size={16} color={C.danger} />
-                <Text style={s.disconnectText}>Disconnect</Text>
-              </Pressable>
-            </View>
-          </LinearGradient>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={s.header}>
+          <Pressable onPress={() => router.back()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={C.textPrimary} />
+          </Pressable>
+          <Text style={s.title}>Wallet</Text>
         </View>
-      ) : (
-        <>
-          {/* Info */}
-          <View style={s.infoCard}>
-            <Ionicons name="shield-checkmark" size={32} color={C.brandFire} />
-            <Text style={s.infoTitle}>Connect Your Wallet</Text>
-            <Text style={s.infoDesc}>
-              Link a Solana wallet to stake SOL in pools, earn rewards, and manage your funds securely on-chain.
-            </Text>
-          </View>
 
-          {/* Wallet Options */}
-          <Text style={s.sectionLabel}>CHOOSE WALLET</Text>
-          {WALLETS.map(w => (
-            <Pressable
-              key={w.key}
-              style={s.walletOption}
-              onPress={() => handleConnect(w.key)}
-              disabled={connecting !== null}
+        {/* Connected Wallet */}
+        {walletAddress ? (
+          <View style={s.connectedCard}>
+            <LinearGradient
+              colors={['#1a1a2e', '#16213e']}
+              style={s.connectedGradient}
             >
-              <Text style={s.walletIcon}>{w.icon}</Text>
-              <View style={s.walletInfo}>
-                <Text style={s.walletName}>{w.name}</Text>
-                <Text style={s.walletDesc}>
-                  {installed[w.key] ? w.description : `Install ${w.name} to connect`}
-                </Text>
+              <View style={s.connectedHeader}>
+                <Ionicons name="wallet" size={24} color={C.brandGold} />
+                <Text style={s.connectedLabel}>Wallet Connected</Text>
+                {isConnected && (
+                  <View style={s.phantomBadge}>
+                    <Text style={s.phantomBadgeText}>PHANTOM</Text>
+                  </View>
+                )}
               </View>
-              {connecting === w.key ? (
-                <ActivityIndicator size="small" color={w.color} />
-              ) : (
-                <Ionicons
-                  name={installed[w.key] ? 'arrow-forward' : 'download-outline'}
-                  size={20}
-                  color={w.color}
-                />
-              )}
-            </Pressable>
-          ))}
+              <Text style={s.walletAddress}>
+                {walletAddress.slice(0, 8)}...{walletAddress.slice(-8)}
+              </Text>
+              <View style={s.balanceRow}>
+                <Text style={s.balanceLabel}>Balance</Text>
+                {loadingBalance ? (
+                  <ActivityIndicator size="small" color={C.brandGold} />
+                ) : (
+                  <Text style={s.balanceValue}>
+                    {balance !== null ? `${balance.toFixed(4)} SOL` : '\u2014'}
+                  </Text>
+                )}
+              </View>
+              <View style={s.connectedActions}>
+                <Pressable style={s.refreshBtn} onPress={() => fetchBalance(walletAddress)}>
+                  <Ionicons name="refresh" size={16} color={C.textSecondary} />
+                  <Text style={s.refreshText}>Refresh</Text>
+                </Pressable>
+                <Pressable style={s.manageBtn} onPress={() => modal.open()}>
+                  <Ionicons name="settings-outline" size={16} color={C.textSecondary} />
+                  <Text style={s.refreshText}>Manage</Text>
+                </Pressable>
+                <Pressable
+                  style={s.disconnectBtn}
+                  onPress={handleDisconnect}
+                  disabled={isDisconnecting}
+                >
+                  <Ionicons name="unlink" size={16} color={C.danger} />
+                  <Text style={s.disconnectText}>
+                    {isDisconnecting ? '...' : 'Disconnect'}
+                  </Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </View>
+        ) : (
+          <>
+            {/* Info */}
+            <View style={s.infoCard}>
+              <Ionicons name="wallet-outline" size={48} color={C.brandFire} />
+              <Text style={s.infoTitle}>Connect Your Wallet</Text>
+              <Text style={s.infoDesc}>
+                Connect your Phantom wallet to stake SOL in pools, earn rewards, and manage your funds on-chain.
+              </Text>
+            </View>
 
-          {/* Alternative Payment Methods Info */}
-          <Text style={[s.sectionLabel, { marginTop: Spacing.xl }]}>COMING SOON</Text>
-          <View style={s.comingSoon}>
-            <View style={s.comingSoonRow}>
-              <Text style={s.comingSoonIcon}>💳</Text>
-              <View style={s.comingSoonInfo}>
-                <Text style={s.comingSoonTitle}>Card Payments via Stripe</Text>
-                <Text style={s.comingSoonDesc}>Pay with credit/debit card</Text>
+            {/* Phantom Connect Button */}
+            <Pressable onPress={handleConnect}>
+              <LinearGradient
+                colors={['#AB9FF2', '#6C63FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={s.connectBtn}
+              >
+                <Text style={s.phantomIcon}>👻</Text>
+                <Text style={s.connectText}>Connect with Phantom</Text>
+              </LinearGradient>
+            </Pressable>
+          </>
+        )}
+
+        {/* How it works */}
+        <Text style={[s.sectionLabel, { marginTop: Spacing.xl }]}>HOW IT WORKS</Text>
+        <View style={s.stepsCard}>
+          {[
+            { step: '1', text: 'Tap "Connect with Phantom" to sign in securely' },
+            { step: '2', text: 'Authenticate with Google or Apple via Phantom' },
+            { step: '3', text: 'Your Solana wallet is linked automatically' },
+            { step: '4', text: 'Stake SOL when joining accountability pools' },
+          ].map(item => (
+            <View key={item.step} style={s.stepRow}>
+              <View style={s.stepBadge}>
+                <Text style={s.stepNum}>{item.step}</Text>
               </View>
+              <Text style={s.stepText}>{item.text}</Text>
             </View>
-            <View style={s.comingSoonRow}>
-              <Text style={s.comingSoonIcon}>🍎</Text>
-              <View style={s.comingSoonInfo}>
-                <Text style={s.comingSoonTitle}>Apple Pay / Google Pay</Text>
-                <Text style={s.comingSoonDesc}>Native mobile payments</Text>
-              </View>
-            </View>
-            <View style={s.comingSoonRow}>
-              <Text style={s.comingSoonIcon}>🪙</Text>
-              <View style={s.comingSoonInfo}>
-                <Text style={s.comingSoonTitle}>USDC Stablecoin</Text>
-                <Text style={s.comingSoonDesc}>Stake with stable value</Text>
-              </View>
+          ))}
+        </View>
+
+        {/* Coming Soon */}
+        <Text style={[s.sectionLabel, { marginTop: Spacing.xl }]}>COMING SOON</Text>
+        <View style={s.comingSoon}>
+          <View style={s.comingSoonRow}>
+            <Text style={s.comingSoonEmoji}>💳</Text>
+            <View style={s.comingSoonInfo}>
+              <Text style={s.comingSoonTitle}>Card Payments via Stripe</Text>
+              <Text style={s.comingSoonSubDesc}>Pay with credit/debit card</Text>
             </View>
           </View>
-        </>
-      )}
+          <View style={s.comingSoonRow}>
+            <Text style={s.comingSoonEmoji}>🍎</Text>
+            <View style={s.comingSoonInfo}>
+              <Text style={s.comingSoonTitle}>Apple Pay / Google Pay</Text>
+              <Text style={s.comingSoonSubDesc}>Native mobile payments</Text>
+            </View>
+          </View>
+          <View style={[s.comingSoonRow, { borderBottomWidth: 0 }]}>
+            <Text style={s.comingSoonEmoji}>🪙</Text>
+            <View style={s.comingSoonInfo}>
+              <Text style={s.comingSoonTitle}>USDC Stablecoin</Text>
+              <Text style={s.comingSoonSubDesc}>Stake with stable value</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -277,8 +226,13 @@ const s = StyleSheet.create({
   connectedGradient: { padding: Spacing.xl, borderRadius: Radius.xl },
   connectedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   connectedLabel: { fontSize: 14, fontWeight: '600', color: C.success },
+  phantomBadge: {
+    backgroundColor: 'rgba(171,159,242,0.15)', paddingHorizontal: 8, paddingVertical: 2,
+    borderRadius: 6, marginLeft: 'auto',
+  },
+  phantomBadgeText: { fontSize: 10, fontWeight: '700', color: '#AB9FF2' },
   walletAddress: {
-    fontSize: 16, fontFamily: 'monospace', color: C.textPrimary,
+    fontSize: 15, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: C.textPrimary,
     backgroundColor: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: Radius.md,
     marginBottom: 16, overflow: 'hidden',
   },
@@ -288,19 +242,24 @@ const s = StyleSheet.create({
   },
   balanceLabel: { fontSize: 14, color: C.textMuted },
   balanceValue: { fontSize: 24, fontWeight: '800', color: C.brandGold },
-  connectedActions: { flexDirection: 'row', gap: 12 },
+  connectedActions: { flexDirection: 'row', gap: 8 },
   refreshBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: C.border,
   },
-  refreshText: { fontSize: 13, color: C.textSecondary, fontWeight: '600' },
+  refreshText: { fontSize: 12, color: C.textSecondary, fontWeight: '600' },
+  manageBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: 'rgba(171,159,242,0.08)', borderWidth: 1, borderColor: 'rgba(171,159,242,0.3)',
+  },
   disconnectBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 10, borderRadius: Radius.md,
     backgroundColor: 'rgba(255,45,85,0.08)', borderWidth: 1, borderColor: C.dangerDim,
   },
-  disconnectText: { fontSize: 13, color: C.danger, fontWeight: '600' },
+  disconnectText: { fontSize: 12, color: C.danger, fontWeight: '600' },
 
   infoCard: {
     alignItems: 'center', padding: Spacing.xl, backgroundColor: C.bgSurface,
@@ -314,26 +273,35 @@ const s = StyleSheet.create({
     fontSize: 11, fontWeight: '700', color: C.textMuted,
     letterSpacing: 1, marginBottom: Spacing.sm,
   },
-  walletOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    padding: Spacing.md, backgroundColor: C.bgSurface, borderRadius: Radius.md,
-    marginBottom: 8, borderWidth: 1, borderColor: C.border,
+  connectBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 16, borderRadius: Radius.md, marginBottom: Spacing.lg,
   },
-  walletIcon: { fontSize: 28 },
-  walletInfo: { flex: 1 },
-  walletName: { fontSize: 16, fontWeight: '600', color: C.textPrimary },
-  walletDesc: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+  connectText: { fontSize: 16, fontWeight: '700', color: C.white },
+  phantomIcon: { fontSize: 22 },
+
+  stepsCard: {
+    backgroundColor: C.bgSurface, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: C.border, padding: Spacing.md, gap: 14,
+  },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepBadge: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: C.bgElevated,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border,
+  },
+  stepNum: { fontSize: 13, fontWeight: '700', color: C.brandFire },
+  stepText: { flex: 1, fontSize: 14, color: C.textSecondary },
 
   comingSoon: {
     backgroundColor: C.bgSurface, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: C.border, overflow: 'hidden',
+    borderWidth: 1, borderColor: C.border, overflow: 'hidden', marginBottom: 40,
   },
   comingSoonRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  comingSoonIcon: { fontSize: 24 },
+  comingSoonEmoji: { fontSize: 24 },
   comingSoonInfo: { flex: 1 },
   comingSoonTitle: { fontSize: 14, fontWeight: '600', color: C.textSecondary },
-  comingSoonDesc: { fontSize: 12, color: C.textMuted },
+  comingSoonSubDesc: { fontSize: 12, color: C.textMuted },
 });
