@@ -8,6 +8,8 @@ import { router } from "expo-router";
 import { usePools, useMyPools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
 import { useCoach, CoachPersona } from "@/hooks/use-coach";
+import { useSolana, useAccounts } from "@phantom/react-native-sdk";
+import { buildStakeTransaction } from "@/lib/solana-staking";
 
 const FREQUENCY_OPTIONS = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly'];
 
@@ -35,7 +37,7 @@ function getPoolTag(pool: any): string {
 }
 
 export default function PoolsScreen() {
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState("Active");
   const { user } = useAuth();
   const { pools, loading, refetch } = usePools();
   const { pools: myPools, loading: myLoading } = useMyPools();
@@ -61,18 +63,88 @@ export default function PoolsScreen() {
   };
   const cp = personas[persona];
 
+  // Phantom SDK hooks for SOL staking
+  const { solana } = useSolana();
+  const { isConnected: walletConnected } = useAccounts();
+
   async function handleJoin(poolId: string) {
     if (!user) {
       Alert.alert("Error", "Please sign in to join a pool");
       return;
     }
+
+    // Find pool to get stake amount
+    const pool = pools.find((p: any) => p.id === poolId);
+    const stakeAmount = pool?.stake_amount ?? 0;
+
+    // If pool has a stake, confirm with user first
+    if (stakeAmount > 0) {
+      Alert.alert(
+        "Stake Required",
+        `This pool requires a ${stakeAmount} SOL stake. You'll be prompted to approve the transaction in Phantom.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: `Stake ${stakeAmount} SOL`,
+            onPress: () => executeJoin(poolId, stakeAmount),
+          },
+        ]
+      );
+    } else {
+      // Free pool — join directly
+      executeJoin(poolId, 0);
+    }
+  }
+
+  async function executeJoin(poolId: string, stakeAmount: number) {
+    if (!user) return;
     setJoining(poolId);
     try {
-      const { error } = await joinPool(poolId, user.id);
+      let txSignature: string | undefined;
+
+      // If stake required AND wallet connected → do on-chain SOL transfer
+      if (stakeAmount > 0 && walletConnected) {
+        try {
+          const fromAddress = await solana.getPublicKey();
+          if (!fromAddress) {
+            Alert.alert("Error", "Could not get wallet address. Please reconnect your wallet.");
+            return;
+          }
+          const { transaction } = await buildStakeTransaction(fromAddress, stakeAmount);
+          const result = await solana.signAndSendTransaction(transaction);
+          txSignature = (result as any).signature ?? (result as any).hash;
+        } catch (txErr: any) {
+          // User rejected or tx failed
+          if (txErr?.message?.includes('rejected') || txErr?.message?.includes('cancelled')) {
+            Alert.alert("Cancelled", "Transaction was cancelled.");
+            return;
+          }
+          Alert.alert("Transaction Failed", txErr?.message || "Could not complete the SOL transfer.");
+          return;
+        }
+      } else if (stakeAmount > 0 && !walletConnected) {
+        Alert.alert(
+          "Wallet Required",
+          "Please connect your Phantom wallet first to stake SOL.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Connect Wallet", onPress: () => router.push('/wallet') },
+          ]
+        );
+        return;
+      }
+
+      // Join pool in database (with tx signature if staked)
+      const { error } = await joinPool(poolId, user.id, txSignature);
       if (error) {
         Alert.alert("Error", error.message);
       } else {
-        Alert.alert("Success", "You've joined the pool!");
+        Alert.alert(
+          "🎉 You're In!",
+          txSignature
+            ? `Staked ${stakeAmount} SOL successfully. Good luck!`
+            : "You've joined the pool! Good luck!"
+        );
         refetch();
       }
     } finally {

@@ -211,50 +211,86 @@ export async function joinPool(
     .select()
     .single();
 
-  if (!error) {
-    // Log activity
-    await supabase.from('activity_log').insert({
-      user_id: userId,
-      pool_id: poolId,
-      action: 'pool_joined',
-      description: 'Joined a stake pool',
-    });
+  if (error) {
+    console.error('joinPool insert error:', error);
+    // Provide user-friendly error messages
+    if (error.code === '42501') {
+      return { data: null, error: { message: 'Permission denied. RLS policies may need to be configured.' } as any };
+    }
+    if (error.code === '23505') {
+      return { data: null, error: { message: 'You are already a member of this pool.' } as any };
+    }
+    return { data, error };
+  }
 
-    // Increment total pools joined on profile
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('total_pools_joined')
-      .eq('id', userId)
+  // ── Post-join updates (all with fallbacks) ──
+
+  // 1. Manually update pool counts (fallback if trigger doesn't exist)
+  try {
+    await supabase.rpc('increment_pool_players' as any, { p_pool_id: poolId });
+  } catch {
+    // If RPC doesn't exist, do it manually
+    const { data: currentPool } = await supabase
+      .from('pools')
+      .select('current_players, pot_size, stake_amount, status')
+      .eq('id', poolId)
       .single();
-    await supabase
-      .from('profiles')
-      .update({ total_pools_joined: (prof?.total_pools_joined ?? 0) + 1 })
-      .eq('id', userId);
+    if (currentPool) {
+      const newCount = (currentPool.current_players ?? 0) + 1;
+      const newPot = (currentPool.pot_size ?? 0) + (currentPool.stake_amount ?? 0);
+      const updates: any = { current_players: newCount, pot_size: newPot };
+      // Auto-activate pool when 2+ players
+      if (newCount >= 2 && currentPool.status === 'waiting') {
+        updates.status = 'active';
+        updates.started_at = new Date().toISOString();
+      }
+      await supabase.from('pools').update(updates).eq('id', poolId);
+    }
+  }
 
-    // Record Solana transaction if provided
-    if (txSignature && poolCheck) {
-      const { error: txError } = await supabase.rpc('record_sol_transaction', {
+  // 2. Log activity (non-blocking)
+  supabase.from('activity_log').insert({
+    user_id: userId,
+    pool_id: poolId,
+    action: 'pool_joined',
+    description: 'Joined a stake pool',
+  }).then(() => {});
+
+  // 3. Increment total pools joined on profile
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('total_pools_joined')
+    .eq('id', userId)
+    .single();
+  await supabase
+    .from('profiles')
+    .update({ total_pools_joined: (prof?.total_pools_joined ?? 0) + 1 })
+    .eq('id', userId);
+
+  // 4. Record Solana transaction if provided
+  if (txSignature && poolCheck) {
+    try {
+      await supabase.rpc('record_sol_transaction', {
         p_user_id: userId,
         p_pool_id: poolId,
         p_type: 'stake_deposit',
         p_amount: poolCheck.stake_amount,
         p_tx_signature: txSignature,
       });
-      if (txError) {
-        // Fallback: insert directly if RPC not available yet
-        await supabase.from('transactions').insert({
-          user_id: userId,
-          pool_id: poolId,
-          type: 'stake_deposit' as any,
-          amount: poolCheck.stake_amount,
-          tx_signature: txSignature,
-          status: 'confirmed',
-        });
-      }
+    } catch {
+      // Fallback: insert directly
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        pool_id: poolId,
+        type: 'stake_deposit' as any,
+        amount: poolCheck.stake_amount,
+        tx_signature: txSignature,
+        status: 'confirmed',
+      });
     }
   }
 
-  return { data, error };
+  return { data, error: null };
 }
 
 export async function createPool(pool: TablesInsert<'pools'>) {

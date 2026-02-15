@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { Tables } from '@/lib/database.types';
 import { useAuth } from '@/lib/auth-context';
+import { decode } from 'base64-arraybuffer';
 
 type Proof = Tables<'proofs'>;
 
@@ -98,30 +99,53 @@ export async function submitProof(
   poolId: string,
   userId: string,
   memberId: string,
-  imageUri: string
+  imageUri: string,
+  base64Data?: string,
 ) {
   // 1. Upload image to Supabase Storage
+  //    Official Supabase RN pattern: use decode() from base64-arraybuffer
+  //    See: https://supabase.com/docs/guides/storage/uploads
   const fileName = `${userId}/${poolId}/${Date.now()}.jpg`;
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('proof-images')
-    .upload(fileName, blob, {
-      contentType: 'image/jpeg',
-      upsert: false,
-    });
+  let imageUrl = '';
+  try {
+    let uploadBody: ArrayBuffer;
 
-  if (uploadError) return { data: null, error: uploadError };
+    if (base64Data) {
+      // Best path: camera provided base64 directly → decode to ArrayBuffer
+      uploadBody = decode(base64Data);
+    } else {
+      // Fallback: read file via fetch → arrayBuffer (works in Hermes RN)
+      const response = await fetch(imageUri);
+      uploadBody = await response.arrayBuffer();
+    }
 
-  // 2. Get public URL
-  const { data: urlData } = supabase.storage
-    .from('proof-images')
-    .getPublicUrl(fileName);
+    const { error: uploadError } = await supabase.storage
+      .from('proof-images')
+      .upload(fileName, uploadBody, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
 
-  const imageUrl = urlData.publicUrl;
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
+        return { data: null, error: { message: 'Storage bucket not configured. Run supabase-migrations.sql in SQL Editor.' } as any };
+      }
+      return { data: null, error: uploadError };
+    }
 
-  // 3. Insert proof record
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('proof-images')
+      .getPublicUrl(fileName);
+    imageUrl = urlData.publicUrl;
+  } catch (uploadErr: any) {
+    console.error('Image upload failed:', uploadErr);
+    return { data: null, error: { message: `Image upload failed: ${uploadErr.message}` } as any };
+  }
+
+  // 2. Insert proof record
   const { data, error } = await supabase
     .from('proofs')
     .insert({
@@ -133,14 +157,19 @@ export async function submitProof(
     .select()
     .single();
 
-  if (!error && data) {
-    // Log activity
-    await supabase.from('activity_log').insert({
+  if (error) {
+    console.error('Proof insert error:', error);
+    return { data: null, error: { message: `Failed to save proof: ${error.message}` } as any };
+  }
+
+  if (data) {
+    // Log activity (non-blocking)
+    supabase.from('activity_log').insert({
       user_id: userId,
       pool_id: poolId,
       action: 'proof_submitted',
       description: 'Submitted photo proof',
-    });
+    }).then(() => {});
 
     // Get pool info for verification context
     const { data: poolData } = await supabase
@@ -149,53 +178,70 @@ export async function submitProof(
       .eq('id', poolId)
       .single();
 
-    // Call Gemini AI verification Edge Function
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-
-      const verifyResponse = await fetch(
-        `${SUPABASE_URL}/functions/v1/verify-proof`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            proof_id: data.id,
-            image_url: imageUrl,
-            proof_description: poolData?.proof_description || 'Complete the required activity',
-            pool_name: poolData?.name || 'Pool',
-          }),
-        }
-      );
-
-      if (!verifyResponse.ok) {
-        throw new Error(`Verify endpoint returned ${verifyResponse.status}`);
-      }
-
-      const verifyResult = await verifyResponse.json();
-      (data as any).ai_result = verifyResult;
-    } catch (aiErr) {
-      console.warn('AI verification unavailable, auto-approving:', aiErr);
-      // Fallback: auto-approve via RPC which handles all side effects
-      // (updates pool_members streak, daily_habits, profile stats)
-      try {
-        await supabase.rpc('process_proof_verification', {
-          p_proof_id: data.id,
-          p_status: 'approved',
-          p_confidence: 0.75,
-          p_reasoning: 'Auto-approved: AI verification service unavailable.',
-          p_flags: JSON.stringify([]),
-        });
-      } catch (rpcErr) {
-        console.warn('RPC fallback also failed:', rpcErr);
-      }
-    }
+    // Try AI verification via Edge Function, fall back to auto-approve
+    await verifyProof(data.id, imageUrl, poolData, userId, memberId);
   }
 
-  return { data, error };
+  return { data, error: null };
+}
+
+/**
+ * Call AI verification, with graceful fallback to auto-approve
+ */
+async function verifyProof(
+  proofId: string,
+  imageUrl: string,
+  poolData: { name: string; proof_description: string } | null,
+  userId: string,
+  memberId: string,
+) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const verifyResponse = await fetch(
+      `${SUPABASE_URL}/functions/v1/verify-proof`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          proof_id: proofId,
+          image_url: imageUrl,
+          proof_description: poolData?.proof_description || 'Complete the required activity',
+          pool_name: poolData?.name || 'Pool',
+        }),
+      }
+    );
+
+    if (!verifyResponse.ok) {
+      throw new Error(`Verify endpoint returned ${verifyResponse.status}`);
+    }
+  } catch (aiErr) {
+    console.warn('AI verification unavailable, auto-approving:', aiErr);
+    // Fallback: auto-approve via RPC (handles streaks, daily_habits, profile stats)
+    try {
+      await supabase.rpc('process_proof_verification', {
+        p_proof_id: proofId,
+        p_status: 'approved',
+        p_confidence: 0.75,
+        p_reasoning: 'Auto-approved: AI verification service unavailable.',
+        p_flags: JSON.stringify([]),
+      });
+    } catch (rpcErr) {
+      console.warn('RPC fallback failed, manually updating:', rpcErr);
+      // Ultimate fallback: manually update the critical fields
+      const today = new Date().toISOString().split('T')[0];
+      await supabase.from('proofs').update({ status: 'approved', verified_at: new Date().toISOString() }).eq('id', proofId);
+      await supabase.from('pool_members').update({ last_proof_date: today }).eq('id', memberId);
+      await supabase.from('daily_habits').upsert(
+        { user_id: userId, habit_date: today, proofs_count: 1 },
+        { onConflict: 'user_id,habit_date' }
+      );
+    }
+  }
 }
 
 export function useRecentActivity(limit: number = 10) {

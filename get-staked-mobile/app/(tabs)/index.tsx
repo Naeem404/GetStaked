@@ -27,6 +27,7 @@ export default function CameraDashboard() {
   const { pools: myPools, loading: poolsLoading } = useMyPools();
   const { stats, loading: statsLoading } = useUserStats();
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("23:59:59");
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [permission, requestPermission] = useCameraPermissions();
@@ -95,9 +96,10 @@ export default function CameraDashboard() {
 
     if (cameraRef.current) {
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, base64: true });
         if (photo?.uri) {
           setImageUri(photo.uri);
+          setImageBase64(photo.base64 ?? null);
         }
       } catch (e) {
         console.warn('Camera capture failed:', e);
@@ -182,7 +184,7 @@ export default function CameraDashboard() {
           <Ionicons name="checkmark-circle" size={64} color={C.primary} />
           <Text style={d.previewText}>Photo captured</Text>
           <View style={d.previewActions}>
-            <Pressable onPress={() => setImageUri(null)} style={d.retakeBtn}>
+            <Pressable onPress={() => { setImageUri(null); setImageBase64(null); }} style={d.retakeBtn}>
               <Text style={d.retakeText}>Retake</Text>
             </Pressable>
             <Pressable
@@ -244,12 +246,13 @@ export default function CameraDashboard() {
               if (!user || !selectedPoolId || !selectedMemberId || !imageUri) return;
               setSubmitting(true);
               try {
-                const { error } = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri);
+                const { error } = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri, imageBase64 ?? undefined);
                 if (error) {
                   Alert.alert('Error', error.message);
                 } else {
                   setShowPoolSheet(false);
                   setImageUri(null);
+                  setImageBase64(null);
                   setSelectedPoolId(null);
                   setSelectedMemberId(null);
                   Alert.alert('Verified! ✅', 'Your proof has been submitted and verified.');
