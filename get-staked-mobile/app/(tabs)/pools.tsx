@@ -2,20 +2,28 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { C, Spacing, Radius, Fonts } from "@/constants/theme";
+import { C, Spacing, Radius } from "@/constants/theme";
 import { useState } from "react";
 import { router } from "expo-router";
 import { usePools, useMyPools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
 
-const categories = ["All", "Fitness", "Education", "Wellness", "Productivity", "Creative"];
+const filters = ["All", "Active", "Hot", "High Stakes", "New"];
+
+// Mock data matching the reference image — used as fallback when API returns empty
+const mockPools = [
+  { id: 'm1', name: 'Gym 5x/Week', description: 'Selfie with gym equipment visible', stake_amount: 0.5, pot_size: 3, current_players: 6, max_players: 8, duration_days: 7, streak_leader: 12, frequency: '5x/week', tag: 'ACTIVE' },
+  { id: 'm2', name: 'No Sugar Challenge', description: 'Photo of every meal — zero added sugar', stake_amount: 2, pot_size: 16, current_players: 8, max_players: 10, duration_days: 14, streak_leader: 9, frequency: 'Daily', tag: 'HOT' },
+  { id: 'm3', name: 'Morning Run 6AM', description: 'GPS-tagged run screenshot before 6:30 AM', stake_amount: 5, pot_size: 20, current_players: 4, max_players: 5, duration_days: 3, streak_leader: 18, frequency: 'Daily', tag: 'HIGH STAKES' },
+  { id: 'm4', name: 'Read 30min/Day', description: 'Photo of book with timestamp', stake_amount: 0.2, pot_size: 2, current_players: 10, max_players: 10, duration_days: 21, streak_leader: 6, frequency: 'Daily', tag: 'ACTIVE' },
+  { id: 'm5', name: 'Ship Code Daily', description: 'Screenshot of GitHub commit graph', stake_amount: 1, pot_size: 3, current_players: 3, max_players: 6, duration_days: 10, streak_leader: 4, frequency: 'Daily', tag: 'NEW' },
+  { id: 'm6', name: 'Cold Plunge', description: 'Video proof of 2-min cold exposure', stake_amount: 3, pot_size: 15, current_players: 5, max_players: 5, duration_days: 5, streak_leader: 15, frequency: 'Daily', tag: 'HOT' },
+];
 
 export default function PoolsScreen() {
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [activeTab, setActiveTab] = useState<'active' | 'available'>('active');
+  const [activeFilter, setActiveFilter] = useState("All");
   const { user } = useAuth();
-  const categoryFilter = activeCategory === "All" ? undefined : activeCategory.toLowerCase();
-  const { pools, loading, refetch } = usePools(categoryFilter);
+  const { pools, loading, refetch } = usePools();
   const { pools: myPools, loading: myLoading } = useMyPools();
   const [joining, setJoining] = useState<string | null>(null);
 
@@ -38,209 +46,172 @@ export default function PoolsScreen() {
     }
   }
 
-  const displayPools = activeTab === 'active' ? myPools : pools;
-  const isLoading = activeTab === 'active' ? myLoading : loading;
+  // Use real pools if available, otherwise mock data
+  const allPools = pools.length > 0 ? pools : mockPools;
+
+  // Filter pools based on active filter
+  const displayPools = activeFilter === "All"
+    ? allPools
+    : allPools.filter((pool: any) => {
+        const tag = (pool.tag || '').toUpperCase();
+        const filter = activeFilter.toUpperCase();
+        if (filter === 'ACTIVE') return tag === 'ACTIVE';
+        if (filter === 'HOT') return tag === 'HOT';
+        if (filter === 'HIGH STAKES') return tag === 'HIGH STAKES';
+        if (filter === 'NEW') return tag === 'NEW';
+        return true;
+      });
+
+  const getTagStyle = (tag: string) => {
+    switch (tag?.toUpperCase()) {
+      case 'HOT': return { bg: 'rgba(255,140,0,0.15)', color: '#FF8C00' };
+      case 'HIGH STAKES': return { bg: 'rgba(220,38,38,0.15)', color: '#EF4444' };
+      case 'NEW': return { bg: 'rgba(34,197,94,0.15)', color: C.primary };
+      default: return { bg: C.primaryDim, color: C.primary };
+    }
+  };
 
   return (
     <SafeAreaView style={p.safe} edges={["top"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={p.scroll}>
-        {/* Header */}
-        <View style={p.header}>
-          <Text style={p.title}>Pools</Text>
-          <View style={p.headerActions}>
-            <Pressable style={p.headerBtn} onPress={() => router.push('/friends')}>
-              <Ionicons name="people-outline" size={20} color={C.textSecondary} />
-            </Pressable>
-            <Pressable style={p.headerBtn} onPress={() => router.push('/wallet')}>
-              <Ionicons name="wallet-outline" size={20} color={C.textSecondary} />
-            </Pressable>
+        {/* LIVE POOLS badge */}
+        <View style={p.liveBadgeRow}>
+          <View style={p.liveBadge}>
+            <View style={p.liveDot} />
+            <Text style={p.liveBadgeText}>LIVE POOLS</Text>
           </View>
         </View>
 
-        {/* Active / Available toggle */}
-        <View style={p.tabRow}>
-          <Pressable
-            onPress={() => setActiveTab('active')}
-            style={[p.tab, activeTab === 'active' && p.tabActive]}
-          >
-            <Text style={[p.tabText, activeTab === 'active' && p.tabTextActive]}>
-              Active Pools
-            </Text>
-            {myPools.length > 0 && (
-              <View style={p.tabBadge}>
-                <Text style={p.tabBadgeText}>{myPools.length}</Text>
-              </View>
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('available')}
-            style={[p.tab, activeTab === 'available' && p.tabActive]}
-          >
-            <Text style={[p.tabText, activeTab === 'available' && p.tabTextActive]}>
-              Available
-            </Text>
-          </Pressable>
-        </View>
+        {/* Title */}
+        <Text style={p.title}>Active Stake Pools</Text>
+        <Text style={p.subtitle}>
+          Real money. Real competition. Pick your challenge and put your SOL on the line.
+        </Text>
 
-        {/* Categories (only for available tab) */}
-        {activeTab === 'available' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={p.catRow}
-          >
-            {categories.map((cat) => (
-              <Pressable
-                key={cat}
-                onPress={() => setActiveCategory(cat)}
-                style={[p.catPill, activeCategory === cat && p.catPillActive]}
-              >
-                <Text style={[p.catText, activeCategory === cat && p.catTextActive]}>{cat}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
+        {/* Filter pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={p.filterRow}
+        >
+          {filters.map((f) => (
+            <Pressable
+              key={f}
+              onPress={() => setActiveFilter(f)}
+              style={[p.filterPill, activeFilter === f && p.filterPillActive]}
+            >
+              <Text style={[p.filterText, activeFilter === f && p.filterTextActive]}>{f}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         {/* Pool Cards */}
-        {isLoading ? (
+        {loading ? (
           <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} />
         ) : displayPools.length === 0 ? (
           <View style={p.emptyState}>
-            <Ionicons
-              name={activeTab === 'active' ? "layers-outline" : "search-outline"}
-              size={48}
-              color={C.textMuted}
-            />
-            <Text style={p.emptyTitle}>
-              {activeTab === 'active' ? 'No active pools' : 'No pools found'}
-            </Text>
-            <Text style={p.emptyDesc}>
-              {activeTab === 'active'
-                ? 'Join a pool to start staking on your habits'
-                : 'Be the first to create one!'}
-            </Text>
-            {activeTab === 'active' && (
-              <Pressable onPress={() => setActiveTab('available')} style={p.emptyBtn}>
-                <Text style={p.emptyBtnText}>Browse Available</Text>
-              </Pressable>
-            )}
+            <Ionicons name="search-outline" size={48} color={C.textMuted} />
+            <Text style={p.emptyTitle}>No pools found</Text>
+            <Text style={p.emptyDesc}>Try a different filter or create your own pool!</Text>
           </View>
         ) : (
           <View style={p.list}>
             {displayPools.map((pool: any) => {
-              const fillPct = ((pool.current_players ?? 0) / pool.max_players) * 100;
-              const isHot = pool.is_hot;
+              const fillPct = ((pool.current_players ?? 0) / (pool.max_players || 1)) * 100;
+              const tag = pool.tag || (pool.is_hot ? 'HOT' : 'ACTIVE');
+              const tagStyle = getTagStyle(tag);
 
               return (
-                <Pressable
-                  key={pool.id}
-                  style={({ pressed }) => [
-                    p.card,
-                    isHot && p.cardHot,
-                    pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-                  ]}
-                >
-                  {/* Tag + timer */}
+                <View key={pool.id} style={[p.card, tag === 'HOT' && p.cardHot]}>
+                  {/* Tag + time left */}
                   <View style={p.cardHeader}>
-                    <View style={[p.tag, isHot ? p.tagHot : p.tagActive]}>
-                      <Text style={[p.tagText, isHot ? p.tagTextHot : p.tagTextActive]}>
-                        {isHot ? 'HOT' : 'ACTIVE'}
-                      </Text>
+                    <View style={[p.tag, { backgroundColor: tagStyle.bg }]}>
+                      <Text style={[p.tagText, { color: tagStyle.color }]}>{tag}</Text>
                     </View>
-                    <View style={p.timerPill}>
+                    <View style={p.timerRow}>
                       <Ionicons name="time-outline" size={12} color={C.textMuted} />
-                      <Text style={p.timerText}>{pool.duration_days}d</Text>
+                      <Text style={p.timerText}>{pool.duration_days}d left</Text>
                     </View>
                   </View>
 
-                  {/* Title + description */}
-                  <View style={p.cardBody}>
-                    <Text style={p.cardEmoji}>{pool.emoji || '🎯'}</Text>
-                    <View style={p.cardInfo}>
-                      <Text style={p.cardName}>{pool.name}</Text>
-                      <Text style={p.cardMeta} numberOfLines={1}>
-                        {pool.description || `${pool.stake_amount} SOL entry · ${pool.duration_days} days`}
-                      </Text>
-                    </View>
-                  </View>
+                  {/* Pool name + description */}
+                  <Text style={p.cardName}>{pool.name}</Text>
+                  <Text style={p.cardDesc} numberOfLines={1}>
+                    {pool.description || `${pool.stake_amount} SOL entry · ${pool.duration_days} days`}
+                  </Text>
 
-                  {/* Stake + Pot */}
+                  {/* Stake + Total Pot */}
                   <View style={p.stakeRow}>
                     <View>
                       <Text style={p.stakeLabel}>STAKE</Text>
-                      <View style={p.stakeValue}>
+                      <View style={p.stakeValueRow}>
                         <Text style={p.stakeNum}>{pool.stake_amount}</Text>
                         <Text style={p.stakeSol}>SOL</Text>
                       </View>
                     </View>
                     <View style={p.stakeRight}>
                       <Text style={p.stakeLabel}>TOTAL POT</Text>
-                      <View style={p.stakeValue}>
+                      <View style={p.stakeValueRow}>
                         <Text style={[p.stakeNum, { color: C.primary }]}>
-                          {(pool.pot_size ?? 0).toFixed(1)}
+                          {typeof pool.pot_size === 'number' ? pool.pot_size : 0}
                         </Text>
-                        <Text style={p.stakeSol}>SOL</Text>
+                        <Text style={[p.stakeSol, { color: C.primary }]}>SOL</Text>
                       </View>
                     </View>
                   </View>
 
-                  {/* Players bar */}
-                  <View style={p.playersRow}>
-                    <View style={p.stat}>
+                  {/* Players + Best Streak */}
+                  <View style={p.metaRow}>
+                    <View style={p.metaItem}>
                       <Ionicons name="people-outline" size={13} color={C.textMuted} />
-                      <Text style={p.statText}>
-                        {pool.current_players ?? 0}/{pool.max_players}
+                      <Text style={p.metaText}>
+                        {pool.current_players ?? 0}/{pool.max_players} players
                       </Text>
                     </View>
                     {pool.streak_leader && (
-                      <View style={p.stat}>
-                        <Text style={p.flameIcon}>🔥</Text>
-                        <Text style={p.statText}>{pool.streak_leader}d best</Text>
+                      <View style={p.metaItem}>
+                        <Ionicons name="flame" size={13} color={C.accent} />
+                        <Text style={p.metaText}>{pool.streak_leader}d best streak</Text>
                       </View>
                     )}
                   </View>
+
+                  {/* Progress bar */}
                   <View style={p.barBg}>
                     <LinearGradient
                       colors={[C.primary, '#4ADE80']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={[p.barFill, { width: `${fillPct}%` }]}
+                      style={[p.barFill, { width: `${Math.min(fillPct, 100)}%` }]}
                     />
                   </View>
 
-                  {/* Action buttons */}
-                  <View style={p.actionRow}>
-                    {activeTab === 'active' ? (
-                      <>
-                        <Pressable style={p.actionBtnOutline}>
-                          <Ionicons name="share-outline" size={16} color={C.textSecondary} />
-                          <Text style={p.actionBtnOutlineText}>Share</Text>
-                        </Pressable>
-                        <Pressable style={p.actionBtnOutline}>
-                          <Ionicons name="exit-outline" size={16} color={C.danger} />
-                          <Text style={[p.actionBtnOutlineText, { color: C.danger }]}>Leave</Text>
-                        </Pressable>
-                      </>
-                    ) : (
-                      <Pressable
-                        onPress={() => handleJoin(pool.id)}
-                        disabled={joining === pool.id}
-                        style={{ flex: 1 }}
-                      >
-                        <LinearGradient
-                          colors={[C.primary, '#4ADE80']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 1, y: 0 }}
-                          style={[p.joinBtn, joining === pool.id && { opacity: 0.5 }]}
-                        >
-                          <Text style={p.joinText}>
-                            {joining === pool.id ? 'Joining...' : `Join Pool · ${pool.stake_amount} SOL`}
-                          </Text>
-                        </LinearGradient>
-                      </Pressable>
-                    )}
-                  </View>
-                </Pressable>
+                  {/* Frequency tag */}
+                  {pool.frequency && (
+                    <View style={p.freqRow}>
+                      <Ionicons name="flash" size={12} color={C.primary} />
+                      <Text style={p.freqText}>{pool.frequency}</Text>
+                    </View>
+                  )}
+
+                  {/* Join Pool button */}
+                  <Pressable
+                    onPress={() => handleJoin(pool.id)}
+                    disabled={joining === pool.id}
+                  >
+                    <LinearGradient
+                      colors={[C.primary, '#4ADE80']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[p.joinBtn, joining === pool.id && { opacity: 0.5 }]}
+                    >
+                      <Text style={p.joinText}>
+                        {joining === pool.id ? 'Joining...' : 'Join Pool'}
+                      </Text>
+                      <Ionicons name="open-outline" size={16} color={C.white} />
+                    </LinearGradient>
+                  </Pressable>
+                </View>
               );
             })}
           </View>
@@ -263,75 +234,78 @@ export default function PoolsScreen() {
 const p = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bgPrimary },
   scroll: { paddingBottom: 120 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+
+  // LIVE POOLS badge
+  liveBadgeRow: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  title: { fontSize: 28, fontWeight: "800", color: C.textPrimary, letterSpacing: -0.5 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: C.bgSurface, alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: C.border,
-  },
-
-  // Tab toggle
-  tabRow: {
-    flexDirection: "row",
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.lg,
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.md,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.sm,
-  },
-  tabActive: {
-    backgroundColor: C.bgElevated,
-  },
-  tabText: { fontSize: 14, fontWeight: "600", color: C.textMuted },
-  tabTextActive: { color: C.textPrimary },
-  tabBadge: {
     backgroundColor: C.primaryDim,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.25)',
   },
-  tabBadgeText: { fontSize: 11, fontWeight: "700", color: C.primary },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.primary,
+  },
+  liveBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.primary,
+    letterSpacing: 1,
+  },
 
-  // Categories
-  catRow: { paddingHorizontal: Spacing.xl, gap: 8, marginBottom: Spacing.lg },
-  catPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  // Title
+  title: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: C.textPrimary,
+    letterSpacing: -0.5,
+    paddingHorizontal: Spacing.xl,
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: C.textSecondary,
+    lineHeight: 20,
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+
+  // Filter pills
+  filterRow: {
+    paddingHorizontal: Spacing.xl,
+    gap: 8,
+    marginBottom: Spacing.xl,
+  },
+  filterPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 9,
     borderRadius: Radius.full,
     backgroundColor: C.bgSurface,
     borderWidth: 1,
     borderColor: C.border,
   },
-  catPillActive: {
-    backgroundColor: C.primaryDim,
+  filterPillActive: {
+    backgroundColor: C.primary,
     borderColor: C.primary,
   },
-  catText: { fontSize: 13, fontWeight: "600", color: C.textSecondary },
-  catTextActive: { color: C.primary },
+  filterText: { fontSize: 13, fontWeight: "600", color: C.textSecondary },
+  filterTextActive: { color: C.white },
 
   // Pool list
-  list: { paddingHorizontal: Spacing.xl, gap: Spacing.md },
+  list: { paddingHorizontal: Spacing.xl, gap: Spacing.lg },
 
   // Card
   card: {
@@ -355,28 +329,26 @@ const p = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.full,
   },
-  tagActive: { backgroundColor: C.primaryDim },
-  tagHot: { backgroundColor: C.accentDim },
   tagText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  tagTextActive: { color: C.primary },
-  tagTextHot: { color: C.accent },
-  timerPill: {
+  timerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
   timerText: { fontSize: 12, color: C.textMuted },
 
-  cardBody: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: Spacing.lg,
+  cardName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: C.textPrimary,
+    marginBottom: 4,
   },
-  cardEmoji: { fontSize: 36 },
-  cardInfo: { flex: 1 },
-  cardName: { fontSize: 18, fontWeight: "700", color: C.textPrimary, marginBottom: 2 },
-  cardMeta: { fontSize: 13, color: C.textMuted },
+  cardDesc: {
+    fontSize: 13,
+    color: C.textMuted,
+    marginBottom: Spacing.lg,
+    lineHeight: 18,
+  },
 
   // Stake row
   stakeRow: {
@@ -392,19 +364,20 @@ const p = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 2,
   },
-  stakeValue: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  stakeNum: { fontSize: 22, fontWeight: "800", color: C.textPrimary },
-  stakeSol: { fontSize: 13, color: C.textMuted },
+  stakeValueRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  stakeNum: { fontSize: 24, fontWeight: "900", color: C.textPrimary },
+  stakeSol: { fontSize: 13, fontWeight: '600', color: C.textMuted },
 
-  // Players
-  playersRow: {
+  // Meta row
+  metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  stat: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statText: { fontSize: 12, color: C.textMuted },
-  flameIcon: { fontSize: 11 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText: { fontSize: 12, color: C.textMuted },
+
+  // Progress bar
   barBg: {
     height: 4,
     backgroundColor: C.bgHover,
@@ -417,46 +390,30 @@ const p = StyleSheet.create({
     borderRadius: 2,
   },
 
-  // Action buttons
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
+  // Frequency
+  freqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.md,
   },
-  actionBtnOutline: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.md,
-    backgroundColor: C.bgElevated,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  actionBtnOutlineText: { fontSize: 13, fontWeight: "600", color: C.textSecondary },
+  freqText: { fontSize: 12, fontWeight: '600', color: C.primary },
+
+  // Join button
   joinBtn: {
+    flexDirection: 'row',
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 13,
-    borderRadius: Radius.md,
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: Radius.lg,
   },
-  joinText: { fontSize: 14, fontWeight: "700", color: C.white },
+  joinText: { fontSize: 15, fontWeight: "700", color: C.white },
 
   // Empty state
   emptyState: { alignItems: "center", paddingVertical: 48, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: C.textPrimary },
   emptyDesc: { fontSize: 14, color: C.textSecondary, textAlign: "center", paddingHorizontal: 32 },
-  emptyBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: Radius.md,
-    backgroundColor: C.primaryDim,
-    borderWidth: 1,
-    borderColor: C.primary,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: "600", color: C.primary },
 
   // FAB
   fab: {

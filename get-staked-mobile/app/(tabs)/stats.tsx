@@ -203,7 +203,7 @@ export default function LeaderboardScreen() {
                       </Text>
                       <View style={st.statCardDesc}>
                         <Text style={[st.statCardDescText, { color: '#997A00' }]}>
-                          Out of {stats.totalPools ?? 0} pool{(stats.totalPools ?? 0) !== 1 ? 's' : ''} completed
+                          Out of {stats.totalDays ?? 0} day{(stats.totalDays ?? 0) !== 1 ? 's' : ''} completed
                         </Text>
                         <Text style={[st.statCardDescSub, { color: '#B8960F' }]}>
                           {stats.completionRate ?? 0}% completion rate
@@ -289,23 +289,71 @@ export default function LeaderboardScreen() {
                     <Text style={st.addMoreText}>Add more</Text>
                   </Pressable>
 
-                  {/* Heatmap */}
-                  <View style={st.gridSection}>
-                    <Text style={st.sectionTitle}>Activity Heatmap</Text>
-                    <View style={st.gridCard}>
-                      {gridLoading ? (
-                        <ActivityIndicator color={C.primary} />
-                      ) : (
-                        <>
-                          <HabitGrid variant="full" data={habitDays} />
-                          <HabitGridLegend />
-                        </>
-                      )}
+                  {/* ── Streak Dashboard (Reference Image 2) ── */}
+                  <View style={st.streakDashboard}>
+                    {/* STREAK DASHBOARD badge */}
+                    <View style={st.streakBadgeRow}>
+                      <View style={st.streakBadge}>
+                        <Text style={st.streakBadgeText}>STREAK DASHBOARD</Text>
+                      </View>
+                    </View>
+
+                    {/* Title */}
+                    <Text style={st.streakTitle}>Visualize your discipline</Text>
+                    <Text style={st.streakSubtitle}>
+                      Every green square is money earned. Every gap is money lost.
+                    </Text>
+
+                    {/* Stats row */}
+                    <View style={st.streakStatsCard}>
+                      <View style={st.streakStatsRow}>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="flame" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>CURRENT STREAK</Text>
+                          <Text style={st.streakStatValue}>{stats.currentStreak ?? 0} days</Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="calendar" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>TOTAL DAYS</Text>
+                          <Text style={st.streakStatValue}>
+                            {stats.totalDays ?? 0}/91
+                          </Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="trending-up" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>COMPLETION</Text>
+                          <Text style={st.streakStatValue}>{stats.completionRate ?? 0}%</Text>
+                        </View>
+                        <View style={st.streakStatItem}>
+                          <View style={st.streakStatIconWrap}>
+                            <Ionicons name="logo-bitcoin" size={16} color={C.primary} />
+                          </View>
+                          <Text style={st.streakStatLabel}>EARNINGS</Text>
+                          <Text style={[st.streakStatValue, { color: C.primary }]}>
+                            +{stats.totalSolEarned?.toFixed(1) ?? '0.0'} SOL
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Heatmap grid */}
+                      <View style={st.heatmapContainer}>
+                        {gridLoading ? (
+                          <ActivityIndicator color={C.primary} />
+                        ) : (
+                          <>
+                            <HabitGrid variant="full" data={habitDays} />
+                            <HabitGridLegend />
+                          </>
+                        )}
+                      </View>
                     </View>
                   </View>
-
-                  {/* Leaderboard label at bottom */}
-                  <Text style={st.bottomLabel}>LeaderBoard</Text>
                 </View>
               </>
             )}
@@ -571,27 +619,83 @@ const st = StyleSheet.create({
   },
   addMoreText: { fontSize: 14, fontWeight: '600', color: C.textSecondary },
 
-  // Heatmap
-  gridSection: { marginBottom: Spacing.xxl },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: C.textPrimary,
+  // ── Streak Dashboard ──
+  streakDashboard: {
+    marginTop: Spacing.md,
+  },
+  streakBadgeRow: {
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  gridCard: {
+  streakBadge: {
+    backgroundColor: C.primaryDim,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.25)',
+  },
+  streakBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.primary,
+    letterSpacing: 1,
+  },
+  streakTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: C.textPrimary,
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.5,
+  },
+  streakSubtitle: {
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+    lineHeight: 20,
+  },
+  streakStatsCard: {
     backgroundColor: C.bgSurface,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: C.border,
   },
-
-  // Bottom label
-  bottomLabel: {
-    fontSize: 20,
+  streakStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xl,
+  },
+  streakStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakStatIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.primaryDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  streakStatLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: C.textMuted,
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  streakStatValue: {
+    fontSize: 14,
     fontWeight: '800',
     color: C.textPrimary,
-    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  heatmapContainer: {
+    marginTop: 4,
   },
 });

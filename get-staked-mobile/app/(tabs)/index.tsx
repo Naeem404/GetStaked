@@ -1,14 +1,14 @@
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions, Image, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { C, Spacing, Radius, Fonts } from "@/constants/theme";
+import { C, Spacing, Radius } from "@/constants/theme";
 import { router } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { useMyPools } from "@/hooks/use-pools";
 import { useUserStats } from "@/hooks/use-stats";
-import { useState, useEffect } from "react";
-import * as ImagePicker from 'expo-image-picker';
+import { useState, useEffect, useRef } from "react";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,10 +27,19 @@ export default function CameraDashboard() {
   const { stats, loading: statsLoading } = useUserStats();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("23:59:59");
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
 
-  const solBalance = profile?.sol_balance ?? 0;
   const totalPot = myPools.reduce((sum, p) => sum + (p.pot_size ?? 0), 0);
   const activeCount = myPools.length;
+
+  // Request camera permission on mount
+  useEffect(() => {
+    if (!permission?.granted) {
+      requestPermission();
+    }
+  }, [permission]);
 
   // Countdown timer to midnight
   useEffect(() => {
@@ -78,48 +87,42 @@ export default function CameraDashboard() {
       withSpring(1, { damping: 6 })
     );
 
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status === 'granted') {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ['images'],
-          quality: 0.8,
-          allowsEditing: true,
-          aspect: [4, 3],
-        });
-        if (!result.canceled && result.assets[0]) {
-          setImageUri(result.assets[0].uri);
+    if (cameraRef.current) {
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+        if (photo?.uri) {
+          setImageUri(photo.uri);
         }
-      } else {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          quality: 0.8,
-        });
-        if (!result.canceled && result.assets[0]) {
-          setImageUri(result.assets[0].uri);
-        }
+      } catch (e) {
+        console.warn('Camera capture failed:', e);
       }
-    } catch {}
+    }
+  };
+
+  const toggleFacing = () => {
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   };
 
   return (
     <View style={d.container}>
-      {/* Full-screen camera background placeholder */}
-      <View style={d.cameraBackground}>
-        {imageUri ? (
-          <View style={d.previewOverlay}>
-            <Ionicons name="checkmark-circle" size={64} color={C.primary} />
-            <Text style={d.previewText}>Photo captured</Text>
-            <Pressable onPress={() => setImageUri(null)} style={d.retakeBtn}>
-              <Text style={d.retakeText}>Retake</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={d.cameraPlaceholder}>
-            <Ionicons name="camera" size={48} color="rgba(255,255,255,0.15)" />
-          </View>
-        )}
-      </View>
+      {/* Full-screen live camera or captured preview */}
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={d.cameraBackground} resizeMode="cover" />
+      ) : permission?.granted ? (
+        <CameraView
+          ref={cameraRef}
+          style={d.cameraBackground}
+          facing={facing}
+        />
+      ) : (
+        <View style={[d.cameraBackground, d.cameraPlaceholder]}>
+          <Ionicons name="camera" size={48} color="rgba(255,255,255,0.15)" />
+          <Text style={d.permText}>Tap to enable camera</Text>
+          <Pressable onPress={requestPermission} style={d.permBtn}>
+            <Text style={d.permBtnText}>Grant Permission</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Top floating bar */}
       <SafeAreaView edges={["top"]} style={d.topOverlay}>
@@ -169,58 +172,60 @@ export default function CameraDashboard() {
         </View>
       )}
 
-      {/* Center capture button area */}
-      <View style={d.captureArea}>
-        {/* Gallery button */}
-        <Pressable
-          style={d.sideBtn}
-          onPress={async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ['images'],
-              quality: 0.8,
-            });
-            if (!result.canceled && result.assets[0]) {
-              setImageUri(result.assets[0].uri);
-            }
-          }}
-        >
-          <Ionicons name="images-outline" size={24} color={C.white} />
-        </Pressable>
+      {/* Captured image overlay controls */}
+      {imageUri && (
+        <View style={d.previewOverlay}>
+          <Ionicons name="checkmark-circle" size={64} color={C.primary} />
+          <Text style={d.previewText}>Photo captured</Text>
+          <Pressable onPress={() => setImageUri(null)} style={d.retakeBtn}>
+            <Text style={d.retakeText}>Retake</Text>
+          </Pressable>
+        </View>
+      )}
 
-        {/* Main capture button */}
-        <Pressable onPress={handleCapture}>
-          <Animated.View style={[d.captureOuter, pulseAnim]}>
-            <View style={d.captureRingOuter} />
-          </Animated.View>
-          <Animated.View style={btnAnim}>
-            <LinearGradient
-              colors={[C.primary, '#4ADE80']}
-              style={d.captureBtn}
-            >
-              <View style={d.captureBtnInner}>
-                <Ionicons name="camera" size={32} color={C.white} />
-              </View>
-            </LinearGradient>
-          </Animated.View>
-        </Pressable>
+      {/* Bottom capture area — single button + flip */}
+      {!imageUri && (
+        <View style={d.captureArea}>
+          {/* Flip camera button */}
+          <Pressable style={d.sideBtn} onPress={toggleFacing}>
+            <Ionicons name="camera-reverse-outline" size={24} color={C.white} />
+          </Pressable>
 
-        {/* Flip camera button */}
-        <Pressable style={d.sideBtn}>
-          <Ionicons name="camera-reverse-outline" size={24} color={C.white} />
-        </Pressable>
-      </View>
+          {/* Main capture button */}
+          <Pressable onPress={handleCapture}>
+            <Animated.View style={[d.captureOuter, pulseAnim]}>
+              <View style={d.captureRingOuter} />
+            </Animated.View>
+            <Animated.View style={btnAnim}>
+              <LinearGradient
+                colors={[C.primary, '#4ADE80']}
+                style={d.captureBtn}
+              >
+                <View style={d.captureBtnInner} />
+              </LinearGradient>
+            </Animated.View>
+          </Pressable>
+
+          {/* Flash toggle */}
+          <Pressable style={d.sideBtn}>
+            <Ionicons name="flash-outline" size={24} color={C.white} />
+          </Pressable>
+        </View>
+      )}
 
       {/* Swipe hints */}
-      <View style={d.swipeHints}>
-        <View style={d.swipeHint}>
-          <Ionicons name="chevron-back" size={14} color={C.textMuted} />
-          <Text style={d.swipeText}>Pools</Text>
+      {!imageUri && (
+        <View style={d.swipeHints}>
+          <View style={d.swipeHint}>
+            <Ionicons name="chevron-back" size={14} color={C.textMuted} />
+            <Text style={d.swipeText}>Pools</Text>
+          </View>
+          <View style={d.swipeHint}>
+            <Text style={d.swipeText}>Leaderboard</Text>
+            <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
+          </View>
         </View>
-        <View style={d.swipeHint}>
-          <Text style={d.swipeText}>Leaderboard</Text>
-          <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
-        </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -228,24 +233,45 @@ export default function CameraDashboard() {
 const d = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.bgPrimary,
+    backgroundColor: '#000',
   },
   cameraBackground: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0D0D0D',
   },
   cameraPlaceholder: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0D0D0D',
+    gap: 12,
+  },
+  permText: {
+    fontSize: 14,
+    color: C.textMuted,
+    marginTop: 8,
+  },
+  permBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: Radius.full,
+    backgroundColor: C.primary,
+    marginTop: 8,
+  },
+  permBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.white,
   },
   previewOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(10,10,10,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     gap: 12,
+    zIndex: 20,
   },
   previewText: {
     fontSize: 18,
@@ -253,18 +279,18 @@ const d = StyleSheet.create({
     color: C.primary,
   },
   retakeBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: Radius.full,
-    backgroundColor: C.bgElevated,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: C.border,
+    borderColor: 'rgba(255,255,255,0.25)',
     marginTop: 8,
   },
   retakeText: {
     fontSize: 14,
     fontWeight: '600',
-    color: C.textSecondary,
+    color: C.white,
   },
 
   // Top overlay
@@ -381,7 +407,7 @@ const d = StyleSheet.create({
     color: C.primary,
   },
 
-  // Capture area
+  // Capture area — single capture + flip + flash
   captureArea: {
     position: 'absolute',
     bottom: 110,
@@ -430,13 +456,12 @@ const d = StyleSheet.create({
     elevation: 12,
   },
   captureBtnInner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.3)',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'transparent',
   },
 
   // Swipe hints
