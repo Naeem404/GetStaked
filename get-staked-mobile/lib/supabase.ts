@@ -4,8 +4,7 @@ import { Platform } from 'react-native';
 import { Database } from './database.types';
 
 export const SUPABASE_URL = 'https://cpkcskwkoafopqfnznkd.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_vgBzlndGmP3N-vyjoIMTKg_R85-51aU';
-const SUPABASE_PUBLISHABLE_KEY = SUPABASE_ANON_KEY;
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_vgBzlndGmP3N-vyjoIMTKg_R85-51aU';
 
 let _supabase: SupabaseClient<Database> | null = null;
 

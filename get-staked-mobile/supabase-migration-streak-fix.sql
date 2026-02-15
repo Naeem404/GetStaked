@@ -243,4 +243,109 @@ $$;
 SELECT check_missed_proofs();
 
 
-SELECT '✅ Streak fixes applied!' as result;
+-- ─────────────────────────────────────────────────────────────
+-- 5. FIX: friendships unique constraint
+--    Prevents duplicate friend requests between same pair
+-- ─────────────────────────────────────────────────────────────
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'friendships_unique_pair') THEN
+    ALTER TABLE friendships ADD CONSTRAINT friendships_unique_pair UNIQUE (requester_id, addressee_id);
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 6. FIX: Ensure RLS policies exist for friendships, pool_invites, coach_messages
+--    Re-creates them if they were dropped or never created
+-- ─────────────────────────────────────────────────────────────
+
+-- Enable RLS
+ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pool_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE coach_messages ENABLE ROW LEVEL SECURITY;
+
+-- friendships
+DO $$ BEGIN
+  CREATE POLICY "fr_select" ON friendships FOR SELECT TO authenticated
+    USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "fr_insert" ON friendships FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = requester_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "fr_update" ON friendships FOR UPDATE TO authenticated
+    USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "fr_delete" ON friendships FOR DELETE TO authenticated
+    USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- pool_invites
+DO $$ BEGIN
+  CREATE POLICY "pi_select" ON pool_invites FOR SELECT TO authenticated
+    USING (auth.uid() = invited_user_id OR auth.uid() = invited_by);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "pi_insert" ON pool_invites FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = invited_by);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "pi_update" ON pool_invites FOR UPDATE TO authenticated
+    USING (auth.uid() = invited_user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- coach_messages (edge function uses service role, but client reads need RLS)
+DO $$ BEGIN
+  CREATE POLICY "cm_select" ON coach_messages FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "cm_insert" ON coach_messages FOR INSERT TO authenticated
+    WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- proof_reviews table (if it doesn't exist — needed by verify-proof edge function)
+CREATE TABLE IF NOT EXISTS proof_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  proof_id UUID NOT NULL,
+  pool_id UUID,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  reviewer_id UUID REFERENCES auth.users(id),
+  status TEXT DEFAULT 'pending',
+  ai_confidence FLOAT,
+  ai_reasoning TEXT,
+  reviewer_decision TEXT,
+  reviewer_comment TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  reviewed_at TIMESTAMPTZ
+);
+
+ALTER TABLE proof_reviews ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  CREATE POLICY "pr_select" ON proof_reviews FOR SELECT TO authenticated
+    USING (auth.uid() = user_id OR auth.uid() = reviewer_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "pr_insert" ON proof_reviews FOR INSERT TO authenticated
+    WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE POLICY "pr_update" ON proof_reviews FOR UPDATE TO authenticated
+    USING (auth.uid() = reviewer_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+
+SELECT '✅ All fixes applied (streaks, friends, pool invites, coach)!' as result;

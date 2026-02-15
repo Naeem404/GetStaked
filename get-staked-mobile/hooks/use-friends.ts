@@ -32,7 +32,7 @@ export function useFriends() {
       setLoading(true);
 
       // Accepted friends where I'm the requester
-      const { data: sent } = await supabase
+      const { data: sent, error: sentErr } = await supabase
         .from('friendships')
         .select(`
           id, requester_id, addressee_id, status, created_at,
@@ -40,9 +40,10 @@ export function useFriends() {
         `)
         .eq('requester_id', user.id)
         .eq('status', 'accepted');
+      if (sentErr) console.error('Fetch sent friends error:', sentErr);
 
       // Accepted friends where I'm the addressee
-      const { data: received } = await supabase
+      const { data: received, error: recvErr } = await supabase
         .from('friendships')
         .select(`
           id, requester_id, addressee_id, status, created_at,
@@ -50,6 +51,7 @@ export function useFriends() {
         `)
         .eq('addressee_id', user.id)
         .eq('status', 'accepted');
+      if (recvErr) console.error('Fetch received friends error:', recvErr);
 
       const allFriends: Friendship[] = [
         ...(sent || []).map((f: any) => ({ ...f, friend: f.addressee })),
@@ -58,7 +60,7 @@ export function useFriends() {
       setFriends(allFriends);
 
       // Pending requests TO me
-      const { data: pending } = await supabase
+      const { data: pending, error: pendErr } = await supabase
         .from('friendships')
         .select(`
           id, requester_id, addressee_id, status, created_at,
@@ -66,6 +68,7 @@ export function useFriends() {
         `)
         .eq('addressee_id', user.id)
         .eq('status', 'pending');
+      if (pendErr) console.error('Fetch pending requests error:', pendErr);
 
       setPendingRequests(
         (pending || []).map((f: any) => ({ ...f, friend: f.requester }))
@@ -117,26 +120,42 @@ export function useSearchProfiles() {
 }
 
 export async function sendFriendRequest(requesterId: string, addresseeId: string) {
-  // Check if friendship already exists in either direction
-  const { data: existing } = await supabase
-    .from('friendships')
-    .select('id, status')
-    .or(`and(requester_id.eq.${requesterId},addressee_id.eq.${addresseeId}),and(requester_id.eq.${addresseeId},addressee_id.eq.${requesterId})`)
-    .limit(1)
-    .maybeSingle();
+  try {
+    // Check if friendship already exists in either direction
+    const { data: existingList, error: checkErr } = await supabase
+      .from('friendships')
+      .select('id, status')
+      .or(`and(requester_id.eq.${requesterId},addressee_id.eq.${addresseeId}),and(requester_id.eq.${addresseeId},addressee_id.eq.${requesterId})`)
+      .limit(1);
 
-  if (existing) {
-    if (existing.status === 'accepted') return { error: { message: 'Already friends' } };
-    if (existing.status === 'pending') return { error: { message: 'Request already pending' } };
+    if (checkErr) {
+      console.error('Friend check error:', checkErr);
+      return { error: { message: `Database error: ${checkErr.message}` } };
+    }
+
+    const existing = existingList?.[0];
+    if (existing) {
+      if (existing.status === 'accepted') return { error: { message: 'Already friends' } };
+      if (existing.status === 'pending') return { error: { message: 'Request already pending' } };
+      if (existing.status === 'blocked') return { error: { message: 'Cannot send request' } };
+    }
+
+    const { data, error } = await supabase
+      .from('friendships')
+      .insert({ requester_id: requesterId, addressee_id: addresseeId, status: 'pending' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Friend request insert error:', error);
+      return { data: null, error: { message: `Failed to send request: ${error.message}` } };
+    }
+
+    return { data, error: null };
+  } catch (err: any) {
+    console.error('sendFriendRequest exception:', err);
+    return { error: { message: err.message || 'Unknown error sending friend request' } };
   }
-
-  const { data, error } = await supabase
-    .from('friendships')
-    .insert({ requester_id: requesterId, addressee_id: addresseeId })
-    .select()
-    .single();
-
-  return { data, error };
 }
 
 export async function acceptFriendRequest(friendshipId: string) {
@@ -147,6 +166,7 @@ export async function acceptFriendRequest(friendshipId: string) {
     .select()
     .single();
 
+  if (error) console.error('Accept friend request error:', error);
   return { data, error };
 }
 
@@ -156,6 +176,7 @@ export async function removeFriend(friendshipId: string) {
     .delete()
     .eq('id', friendshipId);
 
+  if (error) console.error('Remove friend error:', error);
   return { error };
 }
 

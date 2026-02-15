@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Tables } from '@/lib/database.types';
 import { useAuth } from '@/lib/auth-context';
 import { decode } from 'base64-arraybuffer';
@@ -220,34 +220,20 @@ async function verifyProof(
   poolId: string,
 ): Promise<VerificationResult> {
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
+    const { data: result, error: fnError } = await supabase.functions.invoke('verify-proof', {
+      body: {
+        proof_id: proofId,
+        image_url: imageUrl,
+        proof_description: poolData?.proof_description || 'Complete the required activity',
+        pool_name: poolData?.name || 'Pool',
+        pool_id: poolId,
+        user_id: userId,
+      },
+    });
 
-    const verifyResponse = await fetch(
-      `${SUPABASE_URL}/functions/v1/verify-proof`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          proof_id: proofId,
-          image_url: imageUrl,
-          proof_description: poolData?.proof_description || 'Complete the required activity',
-          pool_name: poolData?.name || 'Pool',
-          pool_id: poolId,
-          user_id: userId,
-        }),
-      }
-    );
-
-    if (!verifyResponse.ok) {
-      throw new Error(`Verify endpoint returned ${verifyResponse.status}`);
+    if (fnError || !result) {
+      throw new Error(fnError?.message || 'Verify function returned no data');
     }
-
-    const result = await verifyResponse.json();
     return {
       status: result.status || 'approved',
       confidence: result.confidence ?? 0.75,

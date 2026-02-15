@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Audio } from 'expo-av';
 import { File, Paths } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 
 export type CoachPersona = 'drill_sergeant' | 'hype_beast' | 'gentle_guide';
@@ -41,41 +41,26 @@ export function useCoach() {
 
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-
-      if (!token) {
-        console.warn('Voice coach: no auth token available');
-        return null;
-      }
-
       const persona = personaOverride || (profile?.coach_persona as CoachPersona) || 'drill_sergeant';
 
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/voice-coach`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'apikey': SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            user_id: user.id,
-            persona,
-            trigger,
-            context,
-          }),
-        }
-      );
+      const { data, error: fnError } = await supabase.functions.invoke('voice-coach', {
+        body: {
+          user_id: user.id,
+          persona,
+          trigger,
+          context,
+        },
+      });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('Voice coach HTTP error:', response.status, errText);
+      if (fnError) {
+        console.error('Voice coach error:', fnError);
         return null;
       }
 
-      const data: CoachResponse = await response.json();
+      if (!data) {
+        console.warn('Voice coach returned no data');
+        return null;
+      }
       setMessage(data.message);
 
       // Play audio if available and voice is enabled
