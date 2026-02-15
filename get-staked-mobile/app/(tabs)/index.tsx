@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Dimensions, Image, Platform, Alert, ActivityIndicator, Modal, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions, Image, Platform, Alert, ActivityIndicator, Modal, ScrollView, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -60,12 +60,30 @@ export default function CameraDashboard() {
     }, [])
   );
 
-  // Request camera permission on mount
+  // Request camera permission on mount (only once)
   useEffect(() => {
-    if (!permission?.granted) {
+    if (permission && !permission.granted && permission.canAskAgain) {
       requestPermission();
     }
-  }, [permission]);
+  }, [permission?.granted]);
+
+  const handleGrantCamera = async () => {
+    if (!permission) {
+      await requestPermission();
+    } else if (permission.canAskAgain) {
+      await requestPermission();
+    } else {
+      // Permission permanently denied — send to app settings
+      Alert.alert(
+        'Camera Permission Required',
+        'Camera access was denied. Please enable it in your device settings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+    }
+  };
 
   // Countdown timer to midnight
   useEffect(() => {
@@ -145,8 +163,8 @@ export default function CameraDashboard() {
         <View style={[d.cameraBackground, d.cameraPlaceholder]}>
           <Ionicons name="camera" size={48} color="rgba(255,255,255,0.15)" />
           <Text style={d.permText}>Tap to enable camera</Text>
-          <Pressable onPress={requestPermission} style={d.permBtn}>
-            <Text style={d.permBtnText}>Grant Permission</Text>
+          <Pressable onPress={handleGrantCamera} style={d.permBtn}>
+            <Text style={d.permBtnText}>Grant Camera Access</Text>
           </Pressable>
         </View>
       )}

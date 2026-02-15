@@ -1,30 +1,14 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { LinearGradient } from "expo-linear-gradient";
-
 import { Ionicons } from "@expo/vector-icons";
-
 import { C, Spacing, Radius } from "@/constants/theme";
-
 import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
-
 import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
-
 import { useRecentActivity } from "@/hooks/use-proofs";
-
 import { useMyPools } from "@/hooks/use-pools";
-
-import { useGlobalLeaderboard } from "@/hooks/use-leaderboard";
-
-import { useAuth } from "@/lib/auth-context";
-
 import { router } from "expo-router";
-
-import { useState, useCallback } from "react";
-
-import { useFocusEffect } from "expo-router";
+import { useState } from "react";
 
 
 
@@ -58,6 +42,13 @@ const AVATAR_COLORS = [
 
 
 
+
+// Top-3 leaderboard data for podium
+const top3Leaderboard = [
+  { rank: 1, name: 'Jordyn Kenter', score: 86239, avatar: 'J' },
+  { rank: 2, name: 'Anna Bator', score: 84397, avatar: 'A' },
+  { rank: 3, name: 'Carl Oliver', score: 83199, avatar: 'C' },
+];
 
 // Fallback mock pools for leaderboard when no real data
 const mockPoolsForLeaderboard = [
@@ -98,51 +89,15 @@ type TabType = 'leaderboard' | 'stats';
 
 
 export default function LeaderboardScreen() {
-
   const [activeTab, setActiveTab] = useState<TabType>('stats');
-
-  const { user } = useAuth();
-
-  const { stats, loading: statsLoading, refetch: refetchStats } = useUserStats();
-
-  const { days: habitDays, loading: gridLoading, refetch: refetchGrid } = useHabitGrid(91);
-
+  const { stats, loading: statsLoading } = useUserStats();
+  const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
-
-  const { pools: myPools, loading: poolsLoading, refetch: refetchMyPools } = useMyPools();
-
-  const { entries: leaderboard, myRank, loading: lbLoading, refetch: refetchLb } = useGlobalLeaderboard(50);
+  const { pools: myPools, loading: poolsLoading } = useMyPools();
   const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
 
-  // Compute pool progress: total days completed / total pool duration days
-  const totalPoolDays = myPools.reduce((sum, p: any) => sum + (p.duration_days || 7), 0);
-  const myMemberData = myPools.map((p: any) => (p.pool_members || []).find((m: any) => m.user_id === user?.id));
-  const totalDaysCompleted = myMemberData.reduce((sum, m: any) => sum + (m?.days_completed ?? 0), 0);
-
-  // Refresh all data when tab is focused
-  useFocusEffect(
-    useCallback(() => {
-      refetchStats();
-      refetchGrid();
-      refetchMyPools();
-      refetchLb();
-    }, [])
-  );
-
-
-
-  // Build podium from real leaderboard data: 2nd, 1st, 3rd
-
-  const top3 = leaderboard.slice(0, 3).map((e, i) => ({
-    rank: i + 1,
-    name: e.display_name || 'Anonymous',
-    score: e.current_streak,
-    avatar: (e.display_name || '?')[0]?.toUpperCase() || '?',
-  }));
-
-  const podiumOrder = top3.length >= 3
-    ? [top3[1], top3[0], top3[2]]
-    : top3;
+  // Podium order: 2nd, 1st, 3rd
+  const podiumOrder = [top3Leaderboard[1], top3Leaderboard[0], top3Leaderboard[2]];
 
 
 
@@ -234,25 +189,7 @@ export default function LeaderboardScreen() {
 
           <>
 
-            {lbLoading ? (
-              <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
-            ) : leaderboard.length === 0 ? (
-              <View style={lb.emptyLeaderboard}>
-                <Ionicons name="trophy-outline" size={48} color={C.textMuted} />
-                <Text style={lb.emptyLeaderTitle}>No Rankings Yet</Text>
-                <Text style={lb.emptyLeaderSub}>
-                  Join a pool and submit proofs to climb the leaderboard!
-                </Text>
-                <Pressable style={lb.emptyLeaderBtn} onPress={() => router.push('/(tabs)/pools')}>
-                  <Text style={lb.emptyLeaderBtnText}>Browse Pools</Text>
-                </Pressable>
-              </View>
-            ) : (
-            <>
-
             {/* ── Top 3 Podium ── */}
-
-            {podiumOrder.length >= 3 && (
             <LinearGradient
 
               colors={['#1A1035', '#0D0B1A', '#0A0A0A']}
@@ -376,36 +313,6 @@ export default function LeaderboardScreen() {
               </View>
 
             </LinearGradient>
-            )}
-
-
-
-            {/* ── My Rank Card ── */}
-            {myRank && (
-              <View style={lb.myRankCard}>
-                <View style={lb.myRankLeft}>
-                  <Text style={lb.myRankLabel}>YOUR RANK</Text>
-                  <Text style={lb.myRankNumber}>#{myRank.rank}</Text>
-                </View>
-                <View style={lb.myRankStats}>
-                  <View style={lb.myRankStat}>
-                    <Ionicons name="flame" size={14} color={C.accent} />
-                    <Text style={lb.myRankStatVal}>{myRank.current_streak}</Text>
-                    <Text style={lb.myRankStatLabel}>Streak</Text>
-                  </View>
-                  <View style={lb.myRankStat}>
-                    <Ionicons name="trophy" size={14} color="#FFD700" />
-                    <Text style={lb.myRankStatVal}>{myRank.total_pools_won}</Text>
-                    <Text style={lb.myRankStatLabel}>Wins</Text>
-                  </View>
-                  <View style={lb.myRankStat}>
-                    <Ionicons name="camera" size={14} color={C.primary} />
-                    <Text style={lb.myRankStatVal}>{myRank.total_proofs_submitted}</Text>
-                    <Text style={lb.myRankStatLabel}>Proofs</Text>
-                  </View>
-                </View>
-              </View>
-            )}
 
             {/* ── Pool-based Leaderboard (active joined pools only) ── */}
 
@@ -576,9 +483,6 @@ export default function LeaderboardScreen() {
             )}
 
           </>
-            )}
-
-          </>
 
         ) : (
 
@@ -620,7 +524,7 @@ export default function LeaderboardScreen() {
 
                     <Text style={st.streakSubtitle}>
 
-                      Every green circle is habit tracked. Every gap is streak broken.
+                      Every green circle is a habit streak. Every gap is a break in the streak.
 
                     </Text>
 
@@ -658,7 +562,7 @@ export default function LeaderboardScreen() {
 
                           <Text style={st.streakStatValue}>
 
-                            {stats.totalDays ?? 0}/{totalPoolDays || 91}
+                            {stats.totalDays ?? 0}/91
 
                           </Text>
 
@@ -750,7 +654,7 @@ export default function LeaderboardScreen() {
 
                       <Text style={[st.statCardBigNum, { color: C.primary }]}>
 
-                        {totalDaysCompleted || stats.totalDays || 0}
+                        {stats.completionRate ?? 0}
 
                       </Text>
 
@@ -758,13 +662,13 @@ export default function LeaderboardScreen() {
 
                         <Text style={[st.statCardDescText, { color: '#4ADE80' }]}>
 
-                          Out of {totalPoolDays || 91} days across {myPools.length || 0} pool{myPools.length !== 1 ? 's' : ''}
+                          Out of {stats.totalDays ?? 0} day{(stats.totalDays ?? 0) !== 1 ? 's' : ''} completed
 
                         </Text>
 
                         <Text style={[st.statCardDescSub, { color: C.textSecondary }]}>
 
-                          {totalPoolDays > 0 ? Math.round(((totalDaysCompleted || stats.totalDays || 0) / totalPoolDays) * 100) : stats.completionRate ?? 0}% completion rate
+                          {stats.completionRate ?? 0}% completion rate
 
                         </Text>
 
@@ -1794,166 +1698,4 @@ const st = StyleSheet.create({
 
 });
 
-const lb = StyleSheet.create({
-  emptyLeaderboard: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: Spacing.xl,
-    gap: 10,
-  },
-  emptyLeaderTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: C.textPrimary,
-  },
-  emptyLeaderSub: {
-    fontSize: 14,
-    color: C.textMuted,
-    textAlign: 'center',
-  },
-  emptyLeaderBtn: {
-    marginTop: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    backgroundColor: C.primaryLight,
-    borderWidth: 1,
-    borderColor: C.primary,
-  },
-  emptyLeaderBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: C.primary,
-  },
-  myRankCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-    padding: Spacing.lg,
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: C.primary,
-  },
-  myRankLeft: {
-    alignItems: 'center',
-    marginRight: Spacing.lg,
-    paddingRight: Spacing.lg,
-    borderRightWidth: 1,
-    borderRightColor: C.border,
-  },
-  myRankLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  myRankNumber: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: C.primary,
-  },
-  myRankStats: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  myRankStat: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  myRankStatVal: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: C.textPrimary,
-  },
-  myRankStatLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: C.textMuted,
-  },
-});
-
-const rk = StyleSheet.create({
-  rankedList: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  rankedListTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: C.textPrimary,
-    marginBottom: Spacing.md,
-  },
-  rankedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    marginBottom: 6,
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: C.border,
-    gap: 10,
-  },
-  rankedRowMe: {
-    borderColor: C.primary,
-    backgroundColor: C.primaryLight,
-  },
-  rankedRank: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: C.textMuted,
-    width: 28,
-    textAlign: 'center',
-  },
-  rankedRankMe: {
-    color: C.primary,
-  },
-  rankedAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rankedAvatarText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: C.white,
-  },
-  rankedInfo: {
-    flex: 1,
-  },
-  rankedName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: C.textPrimary,
-  },
-  rankedNameMe: {
-    color: C.primary,
-    fontWeight: '700',
-  },
-  rankedMeta: {
-    fontSize: 11,
-    color: C.textMuted,
-    marginTop: 1,
-  },
-  rankedStreakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-    backgroundColor: C.accentDim,
-  },
-  rankedStreakVal: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: C.accent,
-  },
-});
 
