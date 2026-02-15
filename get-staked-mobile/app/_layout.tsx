@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="friends" />
         <Stack.Screen name="wallet" />
         <Stack.Screen name="confirm-email" options={{ presentation: "modal" }} />
+        <Stack.Screen name="congratulations" options={{ presentation: "modal", animation: "fade" }} />
       </Stack>
     </AuthProvider>
   );

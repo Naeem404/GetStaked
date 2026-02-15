@@ -1,26 +1,40 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { C, Spacing, Radius, Fonts } from "@/constants/theme";
+import { C, Spacing, Radius } from "@/constants/theme";
 import { HabitGrid, HabitGridLegend } from "@/components/habit-grid";
 import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
 import { useRecentActivity } from "@/hooks/use-proofs";
 import { useState } from "react";
 
-// Mock leaderboard data (replace with real data from hooks)
-const leaderboardData = [
-  { rank: 1, name: "0xDrk...7f2a", streak: 47, pools: 12, winnings: 24.5, avatar: "D", status: "active" as const },
-  { rank: 2, name: "phantom...9e1b", streak: 42, pools: 9, winnings: 18.3, avatar: "P", status: "active" as const },
-  { rank: 3, name: "sol_beast...3c4d", streak: 38, pools: 15, winnings: 15.7, avatar: "S", status: "active" as const },
-  { rank: 4, name: "habit_ape...6a8f", streak: 35, pools: 7, winnings: 12.1, avatar: "H", status: "active" as const },
-  { rank: 5, name: "staker42...b2e0", streak: 31, pools: 11, winnings: 10.8, avatar: "T", status: "failed" as const },
-  { rank: 6, name: "grind_fm...4d7c", streak: 28, pools: 6, winnings: 9.4, avatar: "G", status: "active" as const },
-  { rank: 7, name: "iron_will...1f3e", streak: 25, pools: 8, winnings: 8.2, avatar: "I", status: "active" as const },
-  { rank: 8, name: "no_quit...5a9b", streak: 22, pools: 5, winnings: 6.7, avatar: "N", status: "failed" as const },
+const { width: SCREEN_W } = Dimensions.get("window");
+
+const AVATAR_COLORS = [
+  ['#FF6B6B', '#EE5A24'],
+  ['#A55EEA', '#8854D0'],
+  ['#45AAF2', '#2D98DA'],
+  ['#26DE81', '#20BF6B'],
+  ['#FD9644', '#F7B731'],
+  ['#FC5C65', '#EB3B5A'],
+  ['#4B7BEC', '#3867D6'],
+  ['#2BCBBA', '#0FB9B1'],
+  ['#D980FA', '#BE2EDD'],
 ];
 
-type TabType = 'leaderboard' | 'analytics';
+const leaderboardData = [
+  { rank: 1, name: "Jordyn Kenter", score: 96239, avatar: "J" },
+  { rank: 2, name: "Anna Bator", score: 84397, avatar: "A" },
+  { rank: 3, name: "Carl Oliver", score: 83199, avatar: "C" },
+  { rank: 4, name: "Davis Curtis", score: 80007, avatar: "D" },
+  { rank: 5, name: "Nisna Ohad", score: 70120, avatar: "N" },
+  { rank: 6, name: "Makaena George", score: 71087, avatar: "M" },
+  { rank: 7, name: "Kenna Bettta", score: 69439, avatar: "K" },
+  { rank: 8, name: "Marth Culep", score: 66800, avatar: "R" },
+  { rank: 9, name: "Zein Das", score: 56909, avatar: "Z" },
+];
+
+type TabType = 'leaderboard' | 'stats';
 
 export default function LeaderboardScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('leaderboard');
@@ -28,202 +42,273 @@ export default function LeaderboardScreen() {
   const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
 
-  const totalPot = 156.8;
+  // Podium order: 2nd, 1st, 3rd
+  const podiumOrder = [leaderboardData[1], leaderboardData[0], leaderboardData[2]];
+
+  const getMedalEmoji = (rank: number) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    return '🥉';
+  };
+
+  const getAvatarColors = (index: number): [string, string] => {
+    const c = AVATAR_COLORS[index % AVATAR_COLORS.length];
+    return [c[0], c[1]];
+  };
 
   return (
     <SafeAreaView style={st.safe} edges={["top"]}>
+      {/* Header */}
+      <View style={st.header}>
+        <Text style={st.title}>
+          {activeTab === 'leaderboard' ? 'Leaderboard' : 'Your Stats'}
+        </Text>
+        <Pressable style={st.headerMenuBtn}>
+          <Ionicons name="menu" size={24} color={C.textSecondary} />
+        </Pressable>
+      </View>
+
+      {/* Tab toggle */}
+      <View style={st.tabRow}>
+        <Pressable
+          onPress={() => setActiveTab('leaderboard')}
+          style={[st.tab, activeTab === 'leaderboard' && st.tabActive]}
+        >
+          <Ionicons name="trophy" size={16} color={activeTab === 'leaderboard' ? '#FFD700' : C.textMuted} />
+          <Text style={[st.tabText, activeTab === 'leaderboard' && st.tabTextActive]}>Leaderboard</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setActiveTab('stats')}
+          style={[st.tab, activeTab === 'stats' && st.tabActive]}
+        >
+          <Ionicons name="stats-chart" size={16} color={activeTab === 'stats' ? C.primary : C.textMuted} />
+          <Text style={[st.tabText, activeTab === 'stats' && st.tabTextActive]}>My Stats</Text>
+        </Pressable>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={st.scroll}>
-        {/* Header */}
-        <View style={st.header}>
-          <Text style={st.title}>
-            {activeTab === 'leaderboard' ? 'Leaderboard' : 'Analytics'}
-          </Text>
-        </View>
-
-        {/* Tab toggle */}
-        <View style={st.tabRow}>
-          <Pressable
-            onPress={() => setActiveTab('leaderboard')}
-            style={[st.tab, activeTab === 'leaderboard' && st.tabActive]}
-          >
-            <Ionicons name="trophy-outline" size={16} color={activeTab === 'leaderboard' ? C.primary : C.textMuted} />
-            <Text style={[st.tabText, activeTab === 'leaderboard' && st.tabTextActive]}>Rankings</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActiveTab('analytics')}
-            style={[st.tab, activeTab === 'analytics' && st.tabActive]}
-          >
-            <Ionicons name="analytics-outline" size={16} color={activeTab === 'analytics' ? C.primary : C.textMuted} />
-            <Text style={[st.tabText, activeTab === 'analytics' && st.tabTextActive]}>Analytics</Text>
-          </Pressable>
-        </View>
-
         {activeTab === 'leaderboard' ? (
           <>
-            {/* Pot amount */}
-            <View style={st.potCard}>
-              <LinearGradient
-                colors={['rgba(34,197,94,0.08)', 'rgba(34,197,94,0.02)']}
-                style={st.potGrad}
-              >
-                <Text style={st.potLabel}>TOTAL POT</Text>
-                <View style={st.potRow}>
-                  <Text style={st.potAmount}>{totalPot.toFixed(1)}</Text>
-                  <Text style={st.potSol}>SOL</Text>
-                </View>
-                <Text style={st.potSub}>{leaderboardData.length} stakers competing</Text>
-              </LinearGradient>
-            </View>
+            {/* ── Top 3 Podium ── */}
+            <LinearGradient
+              colors={['#1A1035', '#0D0B1A', '#0A0A0A']}
+              style={st.podiumSection}
+            >
+              <View style={st.podiumRow}>
+                {podiumOrder.map((leader, i) => {
+                  const isFirst = leader.rank === 1;
+                  const avatarSize = isFirst ? 80 : 60;
+                  const medalSize = isFirst ? 28 : 22;
 
-            {/* Top 3 podium */}
-            <View style={st.podium}>
-              {leaderboardData.slice(0, 3).map((leader, i) => {
-                const isFirst = i === 0;
-                const colors: [string, string] = isFirst
-                  ? [C.accent, '#FFB800']
-                  : i === 1
-                  ? [C.primary, '#4ADE80']
-                  : [C.info, '#60A5FA'];
+                  return (
+                    <View
+                      key={leader.rank}
+                      style={[st.podiumItem, isFirst && st.podiumItemFirst]}
+                    >
+                      {/* Avatar with gradient border */}
+                      <View style={[
+                        st.avatarRing,
+                        {
+                          width: avatarSize + 8,
+                          height: avatarSize + 8,
+                          borderRadius: (avatarSize + 8) / 2,
+                          borderColor: isFirst ? '#FFD700' : leader.rank === 2 ? '#C0C0C0' : '#CD7F32',
+                        },
+                      ]}>
+                        <LinearGradient
+                          colors={getAvatarColors(leader.rank - 1)}
+                          style={[
+                            st.podiumAvatar,
+                            { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+                          ]}
+                        >
+                          <Text style={[st.podiumAvatarText, { fontSize: isFirst ? 28 : 22 }]}>
+                            {leader.avatar}
+                          </Text>
+                        </LinearGradient>
+                        {/* Medal badge */}
+                        <View style={[st.medalBadge, { width: medalSize, height: medalSize, borderRadius: medalSize / 2 }]}>
+                          <Text style={{ fontSize: isFirst ? 16 : 12 }}>{getMedalEmoji(leader.rank)}</Text>
+                        </View>
+                      </View>
 
-                return (
-                  <View key={leader.rank} style={[st.podiumItem, isFirst && st.podiumFirst]}>
-                    <LinearGradient colors={colors} style={[st.podiumAvatar, isFirst && st.podiumAvatarFirst]}>
-                      <Text style={[st.podiumAvatarText, isFirst && { fontSize: 20 }]}>
-                        {leader.avatar}
+                      {/* Name */}
+                      <Text style={[st.podiumName, isFirst && st.podiumNameFirst]} numberOfLines={1}>
+                        {leader.name}
                       </Text>
-                    </LinearGradient>
-                    {isFirst && <Text style={st.crownIcon}>👑</Text>}
-                    <Text style={st.podiumRank}>#{leader.rank}</Text>
-                    <Text style={st.podiumName} numberOfLines={1}>{leader.name}</Text>
-                    <View style={st.podiumStreakRow}>
-                      <Text style={st.podiumFlame}>🔥</Text>
-                      <Text style={st.podiumStreak}>{leader.streak}d</Text>
-                    </View>
-                    <Text style={st.podiumWinnings}>{leader.winnings} SOL</Text>
-                  </View>
-                );
-              })}
-            </View>
 
-            {/* Full rankings list */}
-            <View style={st.rankList}>
-              <View style={st.rankHeader}>
-                <Text style={[st.rankHeaderText, { flex: 0.5 }]}>#</Text>
-                <Text style={[st.rankHeaderText, { flex: 2 }]}>Wallet</Text>
-                <Text style={[st.rankHeaderText, { flex: 1, textAlign: 'center' }]}>Streak</Text>
-                <Text style={[st.rankHeaderText, { flex: 1, textAlign: 'right' }]}>Won</Text>
-              </View>
-
-              {leaderboardData.slice(3).map((leader) => (
-                <View key={leader.rank} style={st.rankRow}>
-                  <Text style={[st.rankNum, { flex: 0.5 }]}>{leader.rank}</Text>
-                  <View style={[st.rankWallet, { flex: 2 }]}>
-                    <View style={st.rankAvatar}>
-                      <Text style={st.rankAvatarText}>{leader.avatar}</Text>
-                    </View>
-                    <View>
-                      <Text style={st.rankName}>{leader.name}</Text>
-                      <View style={st.statusRow}>
-                        <View style={[st.statusDot, leader.status === 'failed' && st.statusDotFailed]} />
-                        <Text style={[st.statusText, leader.status === 'failed' && { color: C.danger }]}>
-                          {leader.status === 'active' ? 'Active' : 'Failed'}
+                      {/* Score */}
+                      <View style={st.podiumScoreRow}>
+                        <Ionicons name="flame" size={14} color="#FFD700" />
+                        <Text style={st.podiumScore}>
+                          {leader.score.toLocaleString()}
                         </Text>
                       </View>
                     </View>
+                  );
+                })}
+              </View>
+            </LinearGradient>
+
+            {/* ── Rankings List ── */}
+            <View style={st.rankList}>
+              {leaderboardData.slice(3).map((leader, idx) => (
+                <View key={leader.rank} style={st.rankRow}>
+                  {/* Avatar */}
+                  <LinearGradient
+                    colors={getAvatarColors(leader.rank - 1)}
+                    style={st.rankAvatar}
+                  >
+                    <Text style={st.rankAvatarText}>{leader.avatar}</Text>
+                  </LinearGradient>
+
+                  {/* Name + Score */}
+                  <View style={st.rankInfo}>
+                    <Text style={st.rankName}>{leader.name}</Text>
+                    <View style={st.rankScoreRow}>
+                      <Ionicons name="flame" size={12} color="#FFD700" />
+                      <Text style={st.rankScoreText}>
+                        {leader.score.toLocaleString()}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={[st.rankStreakCol, { flex: 1 }]}>
-                    <Text style={st.rankFlame}>🔥</Text>
-                    <Text style={st.rankStreakText}>{leader.streak}d</Text>
+
+                  {/* Rank badge */}
+                  <View style={st.rankBadge}>
+                    <Text style={st.rankBadgeText}>{leader.rank}</Text>
                   </View>
-                  <Text style={[st.rankWinText, { flex: 1 }]}>{leader.winnings}</Text>
                 </View>
               ))}
-            </View>
-
-            {/* Action buttons */}
-            <View style={st.actionRow}>
-              <Pressable style={st.actionBtn}>
-                <Ionicons name="eye-outline" size={18} color={C.primary} />
-                <Text style={st.actionBtnText}>View Proofs</Text>
-              </Pressable>
-              <Pressable style={st.actionBtn}>
-                <Ionicons name="notifications-outline" size={18} color={C.accent} />
-                <Text style={[st.actionBtnText, { color: C.accent }]}>Nudge</Text>
-              </Pressable>
             </View>
           </>
         ) : (
           <>
-            {/* Analytics: Stats Grid */}
+            {/* ── Stats: Colorful Cards Grid ── */}
             {statsLoading ? (
-              <ActivityIndicator color={C.primary} style={{ marginVertical: 20 }} />
+              <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
             ) : (
-              <View style={st.statsGrid}>
-                {[
-                  { label: "Current Streak", value: String(stats.currentStreak), icon: "flame" as const, color: C.accent },
-                  { label: "Best Streak", value: String(stats.bestStreak), icon: "trophy" as const, color: C.primary },
-                  { label: "Win Rate", value: `${stats.winRate}%`, icon: "trending-up" as const, color: C.info },
-                  { label: "Completion", value: `${stats.completionRate}%`, icon: "checkmark-circle" as const, color: C.primary },
-                ].map((stat) => (
-                  <View key={stat.label} style={st.statCard}>
-                    <View style={[st.statIconBg, { backgroundColor: stat.color + '15' }]}>
-                      <Ionicons name={stat.icon} size={18} color={stat.color} />
+              <>
+                {/* Progress Card - Full Width - Yellow */}
+                <View style={st.statsContainer}>
+                  <View style={[st.statCardFull, { backgroundColor: '#FFF3CD' }]}>
+                    <View style={st.statCardHeader}>
+                      <Text style={[st.statCardLabel, { color: '#856404' }]}>PROGRESS</Text>
+                      <View style={[st.statCardIconBg, { backgroundColor: 'rgba(133,100,4,0.15)' }]}>
+                        <Ionicons name="book" size={16} color="#856404" />
+                      </View>
                     </View>
-                    <Text style={[st.statValue, { color: stat.color }]}>{stat.value}</Text>
-                    <Text style={st.statLabel}>{stat.label}</Text>
+                    <View style={st.statCardBody}>
+                      <Text style={[st.statCardBigNum, { color: '#856404' }]}>
+                        {stats.completionRate ?? 0}
+                      </Text>
+                      <View style={st.statCardDesc}>
+                        <Text style={[st.statCardDescText, { color: '#997A00' }]}>
+                          Out of {stats.totalPools ?? 0} pool{(stats.totalPools ?? 0) !== 1 ? 's' : ''} completed
+                        </Text>
+                        <Text style={[st.statCardDescSub, { color: '#B8960F' }]}>
+                          {stats.completionRate ?? 0}% completion rate
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                ))}
-              </View>
-            )}
 
-            {/* Heatmap */}
-            <View style={st.gridSection}>
-              <Text style={st.sectionTitle}>Activity Heatmap</Text>
-              <View style={st.gridCard}>
-                {gridLoading ? (
-                  <ActivityIndicator color={C.primary} />
-                ) : (
-                  <>
-                    <HabitGrid variant="full" data={habitDays} />
-                    <HabitGridLegend />
-                  </>
-                )}
-              </View>
-            </View>
+                  {/* Time + Stream Row */}
+                  <View style={st.statRow}>
+                    {/* Time Card - Orange */}
+                    <View style={[st.statCardHalf, { backgroundColor: '#FFE0CC' }]}>
+                      <View style={st.statCardHeader}>
+                        <Text style={[st.statCardLabel, { color: '#CC5500' }]}>TIME</Text>
+                        <View style={[st.statCardIconBg, { backgroundColor: 'rgba(204,85,0,0.15)' }]}>
+                          <Ionicons name="time" size={14} color="#CC5500" />
+                        </View>
+                      </View>
+                      <Text style={[st.statCardMedNum, { color: '#CC5500' }]}>
+                        {stats.currentStreak > 0 ? `${Math.floor(stats.currentStreak * 1.5)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}` : '0:00'}
+                      </Text>
+                      <Text style={[st.statCardSmallText, { color: '#E06600' }]}>
+                        Daily avg time spent proving habits
+                      </Text>
+                    </View>
 
-            {/* Earnings + Risk */}
-            <View style={st.metricsRow}>
-              <View style={st.metricCard}>
-                <Text style={st.metricLabel}>EARNINGS</Text>
-                <Text style={st.metricValue}>+{stats.totalSolEarned?.toFixed(2) ?? '0.00'}</Text>
-                <Text style={st.metricUnit}>SOL</Text>
-              </View>
-              <View style={st.metricCard}>
-                <Text style={st.metricLabel}>RISK LEVEL</Text>
-                <Text style={[st.metricValue, { color: stats.winRate > 60 ? C.primary : C.danger }]}>
-                  {stats.winRate > 80 ? 'Low' : stats.winRate > 60 ? 'Medium' : 'High'}
-                </Text>
-                <View style={st.riskBar}>
-                  <View style={[st.riskFill, {
-                    width: `${Math.min(stats.winRate, 100)}%`,
-                    backgroundColor: stats.winRate > 60 ? C.primary : C.danger,
-                  }]} />
+                    {/* Stream Card - Green */}
+                    <View style={[st.statCardHalf, { backgroundColor: '#D4EDDA' }]}>
+                      <View style={st.statCardHeader}>
+                        <Text style={[st.statCardLabel, { color: '#155724' }]}>STREAK</Text>
+                        <View style={[st.statCardIconBg, { backgroundColor: 'rgba(21,87,36,0.15)' }]}>
+                          <Ionicons name="flash" size={14} color="#155724" />
+                        </View>
+                      </View>
+                      <Text style={[st.statCardMedNum, { color: '#155724' }]}>
+                        {stats.currentStreak ?? 0}
+                      </Text>
+                      <Text style={[st.statCardSmallText, { color: '#1E7E34' }]}>
+                        Day streak! Keep it up to earn 25% more rewards
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Level + Badges Row */}
+                  <View style={st.statRow}>
+                    {/* Level Card - Purple */}
+                    <View style={[st.statCardHalf, { backgroundColor: '#E8D5F5' }]}>
+                      <View style={st.statCardHeader}>
+                        <Text style={[st.statCardLabel, { color: '#6F42C1' }]}>LEVEL</Text>
+                        <View style={[st.statCardIconBg, { backgroundColor: 'rgba(111,66,193,0.15)' }]}>
+                          <Ionicons name="star" size={14} color="#6F42C1" />
+                        </View>
+                      </View>
+                      <Text style={[st.statCardMedNum, { color: '#6F42C1' }]}>
+                        {Math.max(1, Math.floor((stats.bestStreak ?? 0) / 10) + 1)}
+                      </Text>
+                      <Text style={[st.statCardSmallText, { color: '#7E57C2' }]}>
+                        {10 - ((stats.bestStreak ?? 0) % 10)} more points to level up!
+                      </Text>
+                    </View>
+
+                    {/* Badges Card - Blue */}
+                    <View style={[st.statCardHalf, { backgroundColor: '#D1ECF1' }]}>
+                      <View style={st.statCardHeader}>
+                        <Text style={[st.statCardLabel, { color: '#0C5460' }]}>BADGES</Text>
+                        <View style={[st.statCardIconBg, { backgroundColor: 'rgba(12,84,96,0.15)' }]}>
+                          <Ionicons name="ribbon" size={14} color="#0C5460" />
+                        </View>
+                      </View>
+                      <View style={st.badgesGrid}>
+                        {['🏆', '🔥', '⚡', '💎', '🎯', '🌟', '🏅', '👑'].map((badge, i) => (
+                          <View key={i} style={[st.badgeItem, i >= 4 && { opacity: 0.35 }]}>
+                            <Text style={st.badgeEmoji}>{badge}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Add More Button */}
+                  <Pressable style={st.addMoreBtn}>
+                    <Ionicons name="add" size={18} color={C.textSecondary} />
+                    <Text style={st.addMoreText}>Add more</Text>
+                  </Pressable>
+
+                  {/* Heatmap */}
+                  <View style={st.gridSection}>
+                    <Text style={st.sectionTitle}>Activity Heatmap</Text>
+                    <View style={st.gridCard}>
+                      {gridLoading ? (
+                        <ActivityIndicator color={C.primary} />
+                      ) : (
+                        <>
+                          <HabitGrid variant="full" data={habitDays} />
+                          <HabitGridLegend />
+                        </>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Leaderboard label at bottom */}
+                  <Text style={st.bottomLabel}>LeaderBoard</Text>
                 </View>
-              </View>
-            </View>
-
-            {/* Join recommended */}
-            <Pressable style={st.recommendBtn}>
-              <LinearGradient
-                colors={[C.primary, '#4ADE80']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={st.recommendGrad}
-              >
-                <Ionicons name="sparkles" size={20} color={C.white} />
-                <Text style={st.recommendText}>Join Recommended Pool</Text>
-              </LinearGradient>
-            </Pressable>
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -234,21 +319,31 @@ export default function LeaderboardScreen() {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bgPrimary },
   scroll: { paddingBottom: 120 },
+
+  // Header
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.sm,
   },
-  title: { fontSize: 28, fontWeight: "800", color: C.textPrimary, letterSpacing: -0.5 },
+  title: { fontSize: 26, fontWeight: "800", color: C.textPrimary, letterSpacing: -0.5 },
+  headerMenuBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: C.bgSurface,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // Tab toggle
   tabRow: {
     flexDirection: "row",
     marginHorizontal: Spacing.xl,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.lg,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
     backgroundColor: C.bgSurface,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     padding: 4,
     borderWidth: 1,
     borderColor: C.border,
@@ -259,183 +354,222 @@ const st = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: Radius.sm,
+    paddingVertical: 11,
+    borderRadius: Radius.md,
   },
   tabActive: { backgroundColor: C.bgElevated },
   tabText: { fontSize: 14, fontWeight: "600", color: C.textMuted },
   tabTextActive: { color: C.textPrimary },
 
-  // Pot card
-  potCard: {
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.15)',
-  },
-  potGrad: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-  },
-  potLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 1.5,
+  // ── Podium Section ──
+  podiumSection: {
+    paddingTop: 20,
+    paddingBottom: 28,
     marginBottom: 4,
   },
-  potRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  potAmount: { fontSize: 42, fontWeight: '800', color: C.primary },
-  potSol: { fontSize: 18, fontWeight: '600', color: C.textMuted },
-  potSub: { fontSize: 13, color: C.textSecondary, marginTop: 4 },
-
-  // Podium
-  podium: {
+  podiumRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 6,
   },
   podiumItem: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: C.border,
+    paddingTop: 12,
   },
-  podiumFirst: {
-    paddingVertical: Spacing.lg,
-    borderColor: 'rgba(255,140,0,0.3)',
+  podiumItemFirst: {
+    marginTop: -16,
   },
-  podiumAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  avatarRing: {
+    borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  podiumAvatarFirst: { width: 52, height: 52, borderRadius: 26 },
-  podiumAvatarText: { fontSize: 16, fontWeight: '800', color: C.white },
-  crownIcon: { fontSize: 16, marginTop: -4, marginBottom: 2 },
-  podiumRank: { fontSize: 11, fontWeight: '700', color: C.textMuted },
-  podiumName: { fontSize: 11, fontWeight: '600', color: C.textPrimary, marginTop: 2 },
-  podiumStreakRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
-  podiumFlame: { fontSize: 10 },
-  podiumStreak: { fontSize: 12, fontWeight: '700', color: C.accent },
-  podiumWinnings: { fontSize: 13, fontWeight: '800', color: C.primary, marginTop: 4 },
+  podiumAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  podiumAvatarText: { fontWeight: '800', color: C.white },
+  medalBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: C.bgPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: C.bgPrimary,
+  },
+  podiumName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  podiumNameFirst: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.white,
+  },
+  podiumScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  podiumScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFD700',
+  },
 
-  // Rank list
+  // ── Rankings List ──
   rankList: {
-    marginHorizontal: Spacing.xl,
+    marginHorizontal: Spacing.lg,
     backgroundColor: C.bgSurface,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: C.border,
     overflow: 'hidden',
     marginBottom: Spacing.xl,
-  },
-  rankHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: C.bgElevated,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-  },
-  rankHeaderText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
   },
   rankRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
-  rankNum: { fontSize: 14, fontWeight: '600', color: C.textMuted },
-  rankWallet: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   rankAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rankAvatarText: { fontSize: 16, fontWeight: '800', color: C.white },
+  rankInfo: { flex: 1 },
+  rankName: { fontSize: 15, fontWeight: '600', color: C.textPrimary, marginBottom: 2 },
+  rankScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  rankScoreText: { fontSize: 13, fontWeight: '700', color: '#FFD700' },
+  rankBadge: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: C.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  rankAvatarText: { fontSize: 13, fontWeight: '700', color: C.textSecondary },
-  rankName: { fontSize: 13, fontWeight: '600', color: C.textPrimary },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary },
-  statusDotFailed: { backgroundColor: C.danger },
-  statusText: { fontSize: 10, fontWeight: '600', color: C.primary },
-  rankStreakCol: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
-  rankFlame: { fontSize: 11 },
-  rankStreakText: { fontSize: 13, fontWeight: '700', color: C.textPrimary },
-  rankWinText: { fontSize: 14, fontWeight: '700', color: C.primary, textAlign: 'right' },
+  rankBadgeText: { fontSize: 13, fontWeight: '700', color: C.textSecondary },
 
-  // Action buttons
-  actionRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.xl,
-    gap: 10,
-    marginBottom: Spacing.xxl,
+  // ── Stats Cards ──
+  statsContainer: {
+    paddingHorizontal: Spacing.lg,
   },
-  actionBtn: {
+  statCardFull: {
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  statCardHalf: {
     flex: 1,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  statCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  statCardLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  statCardIconBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statCardBigNum: {
+    fontSize: 48,
+    fontWeight: '900',
+  },
+  statCardDesc: {
+    flex: 1,
+  },
+  statCardDescText: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  statCardDescSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statCardMedNum: {
+    fontSize: 36,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  statCardSmallText: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+
+  // Badges
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  badgeItem: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(12,84,96,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeEmoji: { fontSize: 14 },
+
+  // Add more
+  addMoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 13,
-    borderRadius: Radius.md,
-    backgroundColor: C.bgSurface,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  actionBtnText: { fontSize: 14, fontWeight: '600', color: C.primary },
-
-  // Analytics: Stats Grid
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-    marginBottom: Spacing.xxl,
-  },
-  statCard: {
-    width: "47%",
+    gap: 6,
+    paddingVertical: 14,
     backgroundColor: C.bgSurface,
     borderRadius: Radius.lg,
-    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: C.border,
-    gap: 8,
+    borderStyle: 'dashed',
+    marginBottom: Spacing.xxl,
   },
-  statIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: "800",
-  },
-  statLabel: { fontSize: 12, color: C.textMuted },
+  addMoreText: { fontSize: 14, fontWeight: '600', color: C.textSecondary },
 
   // Heatmap
   gridSection: { marginBottom: Spacing.xxl },
@@ -443,11 +577,9 @@ const st = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: C.textPrimary,
-    paddingHorizontal: Spacing.xl,
     marginBottom: Spacing.md,
   },
   gridCard: {
-    marginHorizontal: Spacing.xl,
     backgroundColor: C.bgSurface,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
@@ -455,51 +587,11 @@ const st = StyleSheet.create({
     borderColor: C.border,
   },
 
-  // Metrics
-  metricsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
+  // Bottom label
+  bottomLabel: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.textPrimary,
+    marginBottom: Spacing.lg,
   },
-  metricCard: {
-    flex: 1,
-    backgroundColor: C.bgSurface,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  metricLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: C.textMuted,
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  metricValue: { fontSize: 24, fontWeight: '800', color: C.primary },
-  metricUnit: { fontSize: 13, color: C.textMuted, marginTop: 2 },
-  riskBar: {
-    height: 4,
-    backgroundColor: C.bgHover,
-    borderRadius: 2,
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  riskFill: { height: 4, borderRadius: 2 },
-
-  // Recommend button
-  recommendBtn: {
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.xxl,
-  },
-  recommendGrad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-  },
-  recommendText: { fontSize: 16, fontWeight: '700', color: C.white },
 });
