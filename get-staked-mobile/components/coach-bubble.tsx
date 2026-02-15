@@ -15,6 +15,13 @@ import { useCoach } from "@/hooks/use-coach";
 
 type Persona = "drill-sergeant" | "hype-beast" | "gentle-guide";
 
+// Map display keys (dashes) to API keys (underscores)
+const personaToApi: Record<Persona, "drill_sergeant" | "hype_beast" | "gentle_guide"> = {
+  "drill-sergeant": "drill_sergeant",
+  "hype-beast": "hype_beast",
+  "gentle-guide": "gentle_guide",
+};
+
 const personas: Record<Persona, { name: string; icon: string; colors: [string, string]; msg: string }> = {
   "drill-sergeant": {
     name: "Drill Sergeant",
@@ -83,8 +90,8 @@ export function CoachBubble() {
   const handleOpen = () => {
     setHasMsg(false);
     setOpen(true);
-    // Fetch a fresh coach message
-    getCoachMessage('morning_reminder');
+    // Fetch a fresh coach message with selected persona
+    getCoachMessage('morning_reminder', undefined, personaToApi[persona]);
   };
 
   const handleQuickAction = (action: string) => {
@@ -93,7 +100,11 @@ export function CoachBubble() {
       'How Am I Doing?': 'milestone_streak',
       'SOS — Need Help': 'streak_broken',
     };
-    getCoachMessage((triggerMap[action] || 'morning_reminder') as any);
+    getCoachMessage(
+      (triggerMap[action] || 'morning_reminder') as any,
+      undefined,
+      personaToApi[persona],
+    );
   };
 
   return (
@@ -147,7 +158,7 @@ export function CoachBubble() {
               <Text style={cb.msgText}>{coachMsg || p.msg}</Text>
             )}
             <View style={cb.waveRow}>
-              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder')}>
+              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder', undefined, personaToApi[persona])}>
                 <Ionicons name={playing ? "stop" : "play"} size={16} color={playing ? C.primary : C.textMuted} />
               </Pressable>
               {[12, 18, 8, 22, 14, 10, 20, 16, 12].map((h, i) => (

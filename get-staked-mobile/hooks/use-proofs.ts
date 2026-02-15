@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, SUPABASE_URL } from '@/lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { Tables } from '@/lib/database.types';
 import { useAuth } from '@/lib/auth-context';
 import { decode } from 'base64-arraybuffer';
@@ -78,15 +78,15 @@ export function usePendingProofs() {
           : null;
         if (lastProofDate === today || submittedPoolIds.has(membership.pool_id)) continue;
 
-        // Calculate urgency
-        const endsAt = pool.ends_at ? new Date(pool.ends_at) : null;
+        // Calculate urgency based on time until midnight (daily proof deadline)
         const now = new Date();
-        const hoursLeft = endsAt ? (endsAt.getTime() - now.getTime()) / (1000 * 60 * 60) : 24;
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        const hoursUntilMidnight = (midnight.getTime() - now.getTime()) / (1000 * 60 * 60);
 
         let deadline = '';
-        if (hoursLeft < 1) deadline = `${Math.max(0, Math.round(hoursLeft * 60))}m left`;
-        else if (hoursLeft < 24) deadline = `${Math.round(hoursLeft)}h left`;
-        else deadline = `${Math.round(hoursLeft / 24)}d left`;
+        if (hoursUntilMidnight < 1) deadline = `${Math.max(0, Math.round(hoursUntilMidnight * 60))}m left today`;
+        else deadline = `${Math.round(hoursUntilMidnight)}h left today`;
 
         pending.push({
           pool_id: membership.pool_id,
@@ -95,7 +95,7 @@ export function usePendingProofs() {
           pool_emoji: pool.emoji || '🎯',
           proof_description: pool.proof_description,
           deadline,
-          urgent: hoursLeft < 6,
+          urgent: hoursUntilMidnight < 6,
           ends_at: pool.ends_at,
         });
       }
@@ -230,6 +230,7 @@ async function verifyProof(
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'apikey': SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           proof_id: proofId,
@@ -269,23 +270,41 @@ async function verifyProof(
       console.warn('RPC fallback failed, manually updating:', rpcErr);
       // Ultimate fallback: manually update the critical fields
       const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       await supabase.from('proofs').update({ status: 'approved', verified_at: new Date().toISOString() }).eq('id', proofId);
+
+      // Get current member state to determine streak continuity
+      const { data: curMember } = await supabase.from('pool_members').select('current_streak, best_streak, days_completed, last_proof_date').eq('id', memberId).single();
+      const lastDate = curMember?.last_proof_date ? String(curMember.last_proof_date).split('T')[0] : null;
+      let newPoolStreak: number;
+      if (lastDate === today) {
+        // Already submitted today — don't double-count
+        newPoolStreak = curMember?.current_streak ?? 1;
+      } else if (lastDate === yesterday) {
+        // Yesterday → continue streak
+        newPoolStreak = (curMember?.current_streak ?? 0) + 1;
+      } else {
+        // Gap or first proof → reset to 1
+        newPoolStreak = 1;
+      }
       await supabase.from('pool_members').update({
         last_proof_date: today,
-        days_completed: ((await supabase.from('pool_members').select('days_completed').eq('id', memberId).single()).data?.days_completed ?? 0) + 1,
-        current_streak: ((await supabase.from('pool_members').select('current_streak').eq('id', memberId).single()).data?.current_streak ?? 0) + 1,
+        days_completed: (curMember?.days_completed ?? 0) + (lastDate === today ? 0 : 1),
+        current_streak: newPoolStreak,
+        best_streak: Math.max(curMember?.best_streak ?? 0, newPoolStreak),
       }).eq('id', memberId);
+
       await supabase.from('daily_habits').upsert(
         { user_id: userId, habit_date: today, proofs_count: 1 },
         { onConflict: 'user_id,habit_date' }
       );
-      // Update profile streak
+      // Update profile streak — use max streak across all active pools
       const { data: memberData } = await supabase.from('pool_members').select('current_streak').eq('user_id', userId).eq('status', 'active').order('current_streak', { ascending: false }).limit(1).single();
-      const newStreak = memberData?.current_streak ?? 1;
+      const globalStreak = memberData?.current_streak ?? 1;
       const { data: profData } = await supabase.from('profiles').select('current_streak, best_streak').eq('id', userId).single();
       await supabase.from('profiles').update({
-        current_streak: newStreak,
-        best_streak: Math.max(newStreak, profData?.best_streak ?? 0),
+        current_streak: globalStreak,
+        best_streak: Math.max(globalStreak, profData?.best_streak ?? 0),
         total_proofs_submitted: ((profData as any)?.total_proofs_submitted ?? 0) + 1,
       }).eq('id', userId);
     }

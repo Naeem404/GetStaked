@@ -224,32 +224,11 @@ export async function joinPool(
     return { data, error };
   }
 
-  // ── Post-join updates (all with fallbacks) ──
+  // ── Post-join updates ──
+  // Note: pool current_players, pot_size, and auto-activation are handled
+  // by the DB trigger `on_pool_member_join` — do NOT duplicate here.
 
-  // 1. Manually update pool counts (fallback if trigger doesn't exist)
-  try {
-    await supabase.rpc('increment_pool_players' as any, { p_pool_id: poolId });
-  } catch {
-    // If RPC doesn't exist, do it manually
-    const { data: currentPool } = await supabase
-      .from('pools')
-      .select('current_players, pot_size, stake_amount, status')
-      .eq('id', poolId)
-      .single();
-    if (currentPool) {
-      const newCount = (currentPool.current_players ?? 0) + 1;
-      const newPot = (currentPool.pot_size ?? 0) + (currentPool.stake_amount ?? 0);
-      const updates: any = { current_players: newCount, pot_size: newPot };
-      // Auto-activate pool when 2+ players
-      if (newCount >= 2 && currentPool.status === 'waiting') {
-        updates.status = 'active';
-        updates.started_at = new Date().toISOString();
-      }
-      await supabase.from('pools').update(updates).eq('id', poolId);
-    }
-  }
-
-  // 2. Log activity (non-blocking)
+  // 1. Log activity (non-blocking)
   supabase.from('activity_log').insert({
     user_id: userId,
     pool_id: poolId,

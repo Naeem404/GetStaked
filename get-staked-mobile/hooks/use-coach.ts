@@ -1,15 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
 import { Audio } from 'expo-av';
-import { supabase, SUPABASE_URL } from '@/lib/supabase';
+import { File, Paths } from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
-
-// expo-file-system v19+ moved the classic API to /legacy
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const FileSystem = require('expo-file-system/legacy') as {
-  cacheDirectory: string | null;
-  writeAsStringAsync: (uri: string, contents: string, options?: { encoding: string }) => Promise<void>;
-  deleteAsync: (uri: string, options?: { idempotent: boolean }) => Promise<void>;
-};
 
 export type CoachPersona = 'drill_sergeant' | 'hype_beast' | 'gentle_guide';
 export type CoachTrigger =
@@ -36,6 +30,7 @@ export function useCoach() {
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const tempFileRef = useRef<File | null>(null);
 
   const getCoachMessage = useCallback(async (
     trigger: CoachTrigger,
@@ -49,6 +44,11 @@ export function useCoach() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
+      if (!token) {
+        console.warn('Voice coach: no auth token available');
+        return null;
+      }
+
       const persona = personaOverride || (profile?.coach_persona as CoachPersona) || 'drill_sergeant';
 
       const response = await fetch(
@@ -58,6 +58,7 @@ export function useCoach() {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_ANON_KEY,
           },
           body: JSON.stringify({
             user_id: user.id,
@@ -104,20 +105,28 @@ export function useCoach() {
         soundRef.current = null;
       }
 
+      // Clean up previous temp file
+      if (tempFileRef.current?.exists) {
+        try { tempFileRef.current.delete(); } catch { /* ignore */ }
+      }
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: false,
       });
 
-      // Write base64 audio to a temp file — expo-av cannot play data: URIs on native
-      const tempFile = `${FileSystem.cacheDirectory}coach_audio_${Date.now()}.mp3`;
-      await FileSystem.writeAsStringAsync(tempFile, base64Audio, {
-        encoding: 'base64',
-      });
+      // Decode base64 → bytes → write to temp file (expo-file-system v19 API)
+      const arrayBuffer = decode(base64Audio);
+      const bytes = new Uint8Array(arrayBuffer);
 
+      const tempFile = new File(Paths.cache, `coach_audio_${Date.now()}.mp3`);
+      tempFile.write(bytes);
+      tempFileRef.current = tempFile;
+
+      const fileUri = tempFile.uri;
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: tempFile },
+        { uri: fileUri },
         { shouldPlay: true }
       );
 
@@ -128,7 +137,7 @@ export function useCoach() {
         if ('didJustFinish' in status && status.didJustFinish) {
           setPlaying(false);
           // Clean up temp file in background
-          FileSystem.deleteAsync(tempFile, { idempotent: true }).catch(() => {});
+          try { tempFile.delete(); } catch { /* ignore */ }
         }
       });
     } catch (err) {

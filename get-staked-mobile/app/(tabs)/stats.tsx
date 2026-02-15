@@ -8,7 +8,9 @@ import { useUserStats, useHabitGrid } from "@/hooks/use-stats";
 import { useRecentActivity } from "@/hooks/use-proofs";
 import { useMyPools } from "@/hooks/use-pools";
 import { router, useFocusEffect } from "expo-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 
 
 
@@ -43,45 +45,11 @@ const AVATAR_COLORS = [
 
 
 
-// Top-3 leaderboard data for podium
-const top3Leaderboard = [
-  { rank: 1, name: 'Jordyn Kenter', score: 86239, avatar: 'J' },
-  { rank: 2, name: 'Anna Bator', score: 84397, avatar: 'A' },
-  { rank: 3, name: 'Carl Oliver', score: 83199, avatar: 'C' },
-];
-
-// Fallback mock pools for leaderboard when no real data
-const mockPoolsForLeaderboard = [
-  {
-    id: 'mock-1',
-    name: 'Morning Runs',
-    stake_amount: 0.1,
-    duration_days: 7,
-    status: 'active',
-    current_players: 5,
-    max_players: 8,
-    pool_members: [
-      { id: '1', current_streak: 4, status: 'active', profiles: { display_name: 'Alex', avatar_url: null } },
-      { id: '2', current_streak: 2, status: 'active', profiles: { display_name: 'Sarah', avatar_url: null } },
-      { id: '3', current_streak: 3, status: 'active', profiles: { display_name: 'Mike', avatar_url: null } },
-      { id: '4', current_streak: 5, status: 'active', profiles: { display_name: 'Priya', avatar_url: null } },
-      { id: '5', current_streak: 1, status: 'active', profiles: { display_name: 'Jordan', avatar_url: null } },
-    ],
-  },
-  {
-    id: 'mock-2',
-    name: 'No Sugar Challenge',
-    stake_amount: 0.2,
-    duration_days: 14,
-    status: 'active',
-    current_players: 3,
-    max_players: 5,
-    pool_members: [
-      { id: '6', current_streak: 7, status: 'active', profiles: { display_name: 'Lena', avatar_url: null } },
-      { id: '7', current_streak: 3, status: 'active', profiles: { display_name: 'Raj', avatar_url: null } },
-      { id: '8', current_streak: 5, status: 'active', profiles: { display_name: 'Tina', avatar_url: null } },
-    ],
-  },
+// Fallback top-3 (only used if no real data)
+const fallbackTop3 = [
+  { rank: 1, name: 'No Data', score: 0, avatar: '?' },
+  { rank: 2, name: 'No Data', score: 0, avatar: '?' },
+  { rank: 3, name: 'No Data', score: 0, avatar: '?' },
 ];
 
 type TabType = 'leaderboard' | 'stats';
@@ -89,12 +57,48 @@ type TabType = 'leaderboard' | 'stats';
 
 
 export default function LeaderboardScreen() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('stats');
   const { stats, loading: statsLoading, refetch: refetchStats } = useUserStats();
   const { days: habitDays, loading: gridLoading, refetch: refetchGrid } = useHabitGrid(91);
   const { activity, loading: activityLoading } = useRecentActivity(10);
   const { pools: myPools, loading: poolsLoading, refetch: refetchPools } = useMyPools();
-  const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
+  const [top3, setTop3] = useState(fallbackTop3);
+  const displayPools = myPools;
+
+  // Fetch real global leaderboard for podium
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      // Try RPC first
+      const { data, error } = await supabase.rpc('get_global_leaderboard', { p_limit: 3 });
+      if (!error && data && data.length > 0) {
+        setTop3(data.map((u: any, i: number) => ({
+          rank: i + 1,
+          name: u.display_name || u.username || 'Anonymous',
+          score: u.current_streak ?? 0,
+          avatar: (u.display_name || u.username || '?')[0]?.toUpperCase() || '?',
+        })));
+        return;
+      }
+      // Fallback: query profiles sorted by streak
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, username, current_streak')
+        .gt('current_streak', 0)
+        .order('current_streak', { ascending: false })
+        .limit(3);
+      if (profiles && profiles.length > 0) {
+        setTop3(profiles.map((p: any, i: number) => ({
+          rank: i + 1,
+          name: p.display_name || p.username || 'Anonymous',
+          score: p.current_streak ?? 0,
+          avatar: (p.display_name || p.username || '?')[0]?.toUpperCase() || '?',
+        })));
+      }
+    } catch (e) {
+      console.warn('Leaderboard fetch failed:', e);
+    }
+  }, []);
 
   // Refetch all data when tab is focused (ensures dynamic updates after proof submission)
   useFocusEffect(
@@ -102,11 +106,17 @@ export default function LeaderboardScreen() {
       refetchStats();
       refetchGrid();
       refetchPools();
+      fetchLeaderboard();
     }, [])
   );
 
-  // Podium order: 2nd, 1st, 3rd
-  const podiumOrder = [top3Leaderboard[1], top3Leaderboard[0], top3Leaderboard[2]];
+  // Podium order: 2nd, 1st, 3rd (handle fewer than 3 entries)
+  const padded = [
+    top3[0] || { rank: 1, name: 'Empty', score: 0, avatar: '?' },
+    top3[1] || { rank: 2, name: 'Empty', score: 0, avatar: '?' },
+    top3[2] || { rank: 3, name: 'Empty', score: 0, avatar: '?' },
+  ];
+  const podiumOrder = [padded[1], padded[0], padded[2]];
 
 
 
@@ -332,6 +342,18 @@ export default function LeaderboardScreen() {
             ) : (
 
               <View style={st.poolLeaderboardList}>
+
+                {displayPools.length === 0 && (
+                  <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                    <Ionicons name="people-outline" size={48} color={C.textMuted} />
+                    <Text style={{ color: C.textSecondary, fontSize: 15, marginTop: 12, textAlign: 'center' }}>
+                      Join a pool to see your leaderboard
+                    </Text>
+                    <Pressable onPress={() => router.push('/(tabs)/pools')} style={{ marginTop: 16, backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: Radius.full }}>
+                      <Text style={{ color: C.white, fontWeight: '700', fontSize: 14 }}>Browse Pools</Text>
+                    </Pressable>
+                  </View>
+                )}
 
                 {displayPools.map((pool: any, poolIdx: number) => {
 
@@ -711,7 +733,7 @@ export default function LeaderboardScreen() {
 
                       <Text style={[st.statCardMedNum, { color: C.accent }]}>
 
-                        {stats.currentStreak > 0 ? `${Math.floor(stats.currentStreak * 1.5)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}` : '0:00'}
+                        {stats.currentStreak > 0 ? `${Math.floor(stats.currentStreak * 1.5)}:${String((stats.currentStreak * 7) % 60).padStart(2, '0')}` : '0:00'}
 
                       </Text>
 
