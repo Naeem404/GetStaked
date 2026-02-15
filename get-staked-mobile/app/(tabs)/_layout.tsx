@@ -4,12 +4,10 @@ import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { C, Spacing } from '@/constants/theme';
-import { CoachBubble } from '@/components/coach-bubble';
 
 export default function TabLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bgPrimary }}>
-      <CoachBubble />
       <Tabs
         screenOptions={{
           headerShown: false,

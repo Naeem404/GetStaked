@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,21 @@ import { useState } from "react";
 import { router } from "expo-router";
 import { usePools, useMyPools, joinPool } from "@/hooks/use-pools";
 import { useAuth } from "@/lib/auth-context";
+import { useCoach, CoachPersona } from "@/hooks/use-coach";
+
+const FREQUENCY_OPTIONS = ['Daily', 'Weekly', 'Bi-Weekly', 'Monthly'];
+
+type Persona = 'drill-sergeant' | 'hype-beast' | 'gentle-guide';
+const personas: Record<Persona, { name: string; icon: string; colors: [string, string]; msg: string }> = {
+  'drill-sergeant': { name: 'Drill Sergeant', icon: '\u2B50', colors: [C.danger, '#EF4444'], msg: "Day 5! Two people already dropped. Don't be number three." },
+  'hype-beast': { name: 'Hype Beast', icon: '\u26A1', colors: [C.accent, '#FFB800'], msg: "FIRE STREAK! You're on a roll \u2014 keep it going! \u{1F525}" },
+  'gentle-guide': { name: 'Gentle Guide', icon: '\u{1F33F}', colors: ['#14B8A6', '#06B6D4'], msg: "You're doing great. Steady progress wins the race." },
+};
+const quickActions = [
+  { label: 'Motivate Me', icon: 'flash-outline' as const },
+  { label: 'How Am I Doing?', icon: 'stats-chart-outline' as const },
+  { label: 'SOS \u2014 Need Help', icon: 'warning-outline' as const, danger: true },
+];
 
 const filters = ["All", "Active", "Hot", "High Stakes", "New"];
 
@@ -25,6 +40,26 @@ export default function PoolsScreen() {
   const { pools, loading, refetch } = usePools();
   const { pools: myPools, loading: myLoading } = useMyPools();
   const [joining, setJoining] = useState<string | null>(null);
+
+  // Add Stake modal state
+  const [showAddStake, setShowAddStake] = useState(false);
+  const [stakeAmount, setStakeAmount] = useState('');
+  const [stakeDescription, setStakeDescription] = useState('');
+  const [stakeDays, setStakeDays] = useState('');
+  const [selectedFrequency, setSelectedFrequency] = useState('Daily');
+  const [friendEmail, setFriendEmail] = useState('');
+
+  // Coach / Speaker modal state
+  const [showCoach, setShowCoach] = useState(false);
+  const [persona, setPersona] = useState<Persona>('drill-sergeant');
+  const { message: coachMsg, loading: coachLoading, playing, getCoachMessage, stopAudio } = useCoach();
+  const personaMapDB: Record<Persona, CoachPersona> = { 'drill-sergeant': 'drill_sergeant', 'hype-beast': 'hype_beast', 'gentle-guide': 'gentle_guide' };
+  const handleOpenCoach = () => { setShowCoach(true); getCoachMessage('morning_reminder'); };
+  const handleQuickAction = (action: string) => {
+    const triggerMap: Record<string, string> = { 'Motivate Me': 'morning_reminder', 'How Am I Doing?': 'milestone_streak', 'SOS \u2014 Need Help': 'streak_broken' };
+    getCoachMessage((triggerMap[action] || 'morning_reminder') as any);
+  };
+  const cp = personas[persona];
 
   async function handleJoin(poolId: string) {
     if (!user) {
@@ -64,6 +99,17 @@ export default function PoolsScreen() {
 
   return (
     <SafeAreaView style={p.safe} edges={["top"]}>
+      {/* Header with speaker + title + add button */}
+      <View style={p.headerRow}>
+        <Pressable style={p.headerBtn} onPress={handleOpenCoach}>
+          <Ionicons name="volume-high" size={22} color={C.textSecondary} />
+        </Pressable>
+        <Text style={p.headerTitle}>Pools</Text>
+        <Pressable style={p.headerBtn} onPress={() => setShowAddStake(true)}>
+          <Ionicons name="add" size={24} color={C.primary} />
+        </Pressable>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={p.scroll}>
         {/* LIVE POOLS badge */}
         <View style={p.liveBadgeRow}>
@@ -209,15 +255,104 @@ export default function PoolsScreen() {
         )}
       </ScrollView>
 
-      {/* Floating Create Pool button */}
-      <Pressable
-        style={p.fab}
-        onPress={() => router.push('/create-pool')}
-      >
-        <LinearGradient colors={[C.primary, '#4ADE80']} style={p.fabGrad}>
-          <Ionicons name="add" size={28} color={C.white} />
-        </LinearGradient>
-      </Pressable>
+      {/* ── Coach / Speaker Modal ── */}
+      <Modal visible={showCoach} transparent animationType="slide" onRequestClose={() => setShowCoach(false)}>
+        <Pressable style={p.coachOverlay} onPress={() => setShowCoach(false)} />
+        <View style={p.coachSheet}>
+          <View style={p.coachHandle} />
+          {/* Header */}
+          <View style={p.coachSheetHeader}>
+            <LinearGradient colors={cp.colors} style={p.coachAvatarGrad}>
+              <Text style={{ fontSize: 24 }}>{cp.icon}</Text>
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text style={p.coachPersonaName}>{cp.name}</Text>
+              <View style={p.coachPersonaRow}>
+                {(Object.keys(personas) as Persona[]).map((k) => (
+                  <Pressable key={k} onPress={() => setPersona(k)} style={[p.coachPersonaPill, k === persona && p.coachPersonaPillActive]}>
+                    <Text style={{ fontSize: 14 }}>{personas[k].icon}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+          {/* Message */}
+          <View style={p.coachMsgCard}>
+            {coachLoading ? (
+              <ActivityIndicator color={C.primary} style={{ paddingVertical: 12 }} />
+            ) : (
+              <Text style={p.coachMsgText}>{coachMsg || cp.msg}</Text>
+            )}
+            <View style={p.coachWaveRow}>
+              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder')}>
+                <Ionicons name={playing ? 'stop' : 'play'} size={16} color={playing ? C.primary : C.textMuted} />
+              </Pressable>
+              {[12, 18, 8, 22, 14, 10, 20, 16, 12].map((h, i) => (
+                <View key={i} style={[p.coachWaveBar, { height: h, backgroundColor: playing ? C.primary : C.textMuted }]} />
+              ))}
+            </View>
+          </View>
+          {/* Quick actions */}
+          <View>
+            {quickActions.map((a) => (
+              <Pressable key={a.label} style={p.coachActionBtn} onPress={() => handleQuickAction(a.label)}>
+                <Ionicons name={a.icon} size={18} color={a.danger ? C.danger : C.textSecondary} />
+                <Text style={[p.coachActionText, a.danger && { color: C.danger }]}>{a.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Add Stake Modal ── */}
+      <Modal visible={showAddStake} animationType="slide" transparent onRequestClose={() => setShowAddStake(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={p.modalOverlay}>
+          <View style={p.modalContent}>
+            <View style={p.modalHeader}>
+              <Text style={p.modalTitle}>Add New Stake</Text>
+              <Pressable onPress={() => setShowAddStake(false)} style={p.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={C.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
+              <Text style={p.modalLabel}>Stake Amount (SOL)</Text>
+              <View style={p.modalInputWrap}>
+                <Ionicons name="logo-bitcoin" size={18} color={C.primary} />
+                <TextInput style={p.modalInput} placeholder="0.00" placeholderTextColor={C.textMuted} keyboardType="decimal-pad" value={stakeAmount} onChangeText={setStakeAmount} />
+              </View>
+              <Text style={p.modalLabel}>What is the stake on?</Text>
+              <View style={p.modalInputWrap}>
+                <Ionicons name="flag" size={18} color={C.accent} />
+                <TextInput style={p.modalInput} placeholder="e.g. Morning runs, No sugar, Read daily..." placeholderTextColor={C.textMuted} value={stakeDescription} onChangeText={setStakeDescription} />
+              </View>
+              <Text style={p.modalLabel}>Duration (days)</Text>
+              <View style={p.modalInputWrap}>
+                <Ionicons name="calendar" size={18} color={C.primary} />
+                <TextInput style={p.modalInput} placeholder="7" placeholderTextColor={C.textMuted} keyboardType="number-pad" value={stakeDays} onChangeText={setStakeDays} />
+              </View>
+              <Text style={p.modalLabel}>Frequency</Text>
+              <View style={p.freqModalRow}>
+                {FREQUENCY_OPTIONS.map((freq) => (
+                  <Pressable key={freq} onPress={() => setSelectedFrequency(freq)} style={[p.freqModalPill, selectedFrequency === freq && p.freqModalPillActive]}>
+                    <Text style={[p.freqModalPillText, selectedFrequency === freq && p.freqModalPillTextActive]}>{freq}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={p.modalLabel}>Add Friend to Stake</Text>
+              <View style={p.modalInputWrap}>
+                <Ionicons name="person-add" size={18} color={C.primary} />
+                <TextInput style={p.modalInput} placeholder="Friend's email or username" placeholderTextColor={C.textMuted} value={friendEmail} onChangeText={setFriendEmail} />
+              </View>
+              <Pressable onPress={() => { setShowAddStake(false); router.push('/create-pool'); }} style={p.modalCreateBtn}>
+                <LinearGradient colors={[C.primary, '#4ADE80']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={p.modalCreateGrad}>
+                  <Ionicons name="add-circle" size={20} color={C.white} />
+                  <Text style={p.modalCreateText}>Create Stake</Text>
+                </LinearGradient>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -225,6 +360,32 @@ export default function PoolsScreen() {
 const p = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bgPrimary },
   scroll: { paddingBottom: 120 },
+
+  // Header
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: C.textPrimary,
+    letterSpacing: -0.5,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: C.bgSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
 
   // LIVE POOLS badge
   liveBadgeRow: {
@@ -406,23 +567,45 @@ const p = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: "700", color: C.textPrimary },
   emptyDesc: { fontSize: 14, color: C.textSecondary, textAlign: "center", paddingHorizontal: 32 },
 
-  // FAB
-  fab: {
-    position: "absolute",
-    bottom: 90,
-    right: 20,
-    zIndex: 50,
+  // Coach modal
+  coachOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  coachSheet: {
+    backgroundColor: C.bgSurface,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 40,
+    maxHeight: '60%',
   },
-  fabGrad: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
+  coachHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: C.bgHover, alignSelf: 'center', marginTop: 10, marginBottom: 16 },
+  coachSheetHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: Spacing.xl },
+  coachAvatarGrad: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  coachPersonaName: { fontSize: 17, fontWeight: '700', color: C.textPrimary, marginBottom: 6 },
+  coachPersonaRow: { flexDirection: 'row', gap: 6 },
+  coachPersonaPill: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
+  coachPersonaPillActive: { borderColor: C.primary, backgroundColor: C.primaryLight },
+  coachMsgCard: { backgroundColor: C.bgElevated, borderRadius: Radius.lg, padding: Spacing.lg, marginBottom: Spacing.xl },
+  coachMsgText: { fontSize: 15, color: C.textPrimary, lineHeight: 22, marginBottom: 12 },
+  coachWaveRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  coachWaveBar: { width: 3, borderRadius: 1.5 },
+  coachActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.bgElevated, paddingVertical: 14, paddingHorizontal: Spacing.lg, borderRadius: Radius.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: C.border },
+  coachActionText: { fontSize: 14, fontWeight: '600', color: C.textPrimary },
+
+  // Add Stake modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: C.bgSurface, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingTop: Spacing.xl, paddingHorizontal: Spacing.xl, paddingBottom: 40, maxHeight: '85%' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xl },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: C.textPrimary, letterSpacing: -0.3 },
+  modalCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.bgElevated, alignItems: 'center', justifyContent: 'center' },
+  modalLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, letterSpacing: 0.5, marginBottom: 8, marginTop: Spacing.lg },
+  modalInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.bgElevated, borderRadius: Radius.lg, borderWidth: 1, borderColor: C.border, paddingHorizontal: Spacing.lg, gap: 10 },
+  modalInput: { flex: 1, fontSize: 16, color: C.textPrimary, paddingVertical: 14 },
+  freqModalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  freqModalPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: Radius.full, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border },
+  freqModalPillActive: { backgroundColor: C.primaryDim, borderColor: C.primary },
+  freqModalPillText: { fontSize: 13, fontWeight: '600', color: C.textMuted },
+  freqModalPillTextActive: { color: C.primary },
+  modalCreateBtn: { marginTop: Spacing.xxl, borderRadius: Radius.lg, overflow: 'hidden' },
+  modalCreateGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: Radius.lg },
+  modalCreateText: { fontSize: 18, fontWeight: '800', color: C.white },
 });

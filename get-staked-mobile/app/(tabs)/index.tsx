@@ -134,7 +134,7 @@ export default function CameraDashboard() {
       <SafeAreaView edges={["top"]} style={d.topOverlay}>
         <View style={d.topBar}>
           {/* Left: Profile avatar */}
-          <Pressable onPress={() => router.push('/wallet')} style={d.avatarBtn}>
+          <Pressable onPress={() => router.push('/account')} style={d.avatarBtn}>
             <LinearGradient colors={[C.primary, '#4ADE80']} style={d.avatarGrad}>
               <Text style={d.avatarText}>
                 {profile?.display_name?.[0]?.toUpperCase() || '?'}
@@ -158,10 +158,8 @@ export default function CameraDashboard() {
             </View>
           </View>
 
-          {/* Right: Settings */}
-          <Pressable onPress={() => router.push('/settings')} style={d.settingsBtn}>
-            <Ionicons name="settings-outline" size={22} color={C.white} />
-          </Pressable>
+          {/* Spacer to keep center aligned */}
+          <View style={{ width: 38 }} />
         </View>
       </SafeAreaView>
 
@@ -307,19 +305,6 @@ export default function CameraDashboard() {
         </View>
       )}
 
-      {/* Swipe hints */}
-      {!imageUri && (
-        <View style={d.swipeHints}>
-          <View style={d.swipeHint}>
-            <Ionicons name="chevron-back" size={14} color={C.textMuted} />
-            <Text style={d.swipeText}>Pools</Text>
-          </View>
-          <View style={d.swipeHint}>
-            <Text style={d.swipeText}>Leaderboard</Text>
-            <Ionicons name="chevron-forward" size={14} color={C.textMuted} />
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -453,17 +438,6 @@ const d = StyleSheet.create({
     color: C.accent,
     fontFamily: 'monospace',
   },
-  settingsBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-
   // Active pools strip
   activeStrip: {
     position: 'absolute',
@@ -525,11 +499,11 @@ const d = StyleSheet.create({
   },
   captureOuter: {
     position: 'absolute',
-    top: -10,
-    left: -10,
-    right: -10,
-    bottom: -10,
-    borderRadius: 50,
+    top: -16,
+    left: -16,
+    right: -16,
+    bottom: -16,
+    borderRadius: 56,
     borderWidth: 2,
     borderColor: C.primary,
   },
@@ -556,27 +530,6 @@ const d = StyleSheet.create({
     borderWidth: 4,
     borderColor: 'rgba(255,255,255,0.4)',
     backgroundColor: 'transparent',
-  },
-
-  // Swipe hints
-  swipeHints: {
-    position: 'absolute',
-    bottom: 80,
-    left: Spacing.xl,
-    right: Spacing.xl,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    zIndex: 5,
-  },
-  swipeHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  swipeText: {
-    fontSize: 11,
-    color: C.textMuted,
-    fontWeight: '500',
   },
 
   // Preview actions
