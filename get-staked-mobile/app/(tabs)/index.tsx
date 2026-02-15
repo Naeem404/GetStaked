@@ -8,6 +8,9 @@ import { useAuth } from "@/lib/auth-context";
 import { useMyPools } from "@/hooks/use-pools";
 import { useUserStats } from "@/hooks/use-stats";
 import { usePendingProofs, submitProof } from "@/hooks/use-proofs";
+import { purchaseLifeline, activateLifeline, requestFriendVouch } from "@/hooks/use-lifelines";
+import { useFriendIds } from "@/hooks/use-friends";
+import { getDemoBalance } from "@/lib/demo-wallet";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
@@ -37,6 +40,9 @@ export default function CameraDashboard() {
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showLifeline, setShowLifeline] = useState(false);
+  const [lifelineLoading, setLifelineLoading] = useState(false);
+  const friendIds = useFriendIds();
 
   const totalPot = myPools.reduce((sum, p) => sum + (p.pot_size ?? 0), 0);
   const activeCount = myPools.length;
@@ -316,12 +322,129 @@ export default function CameraDashboard() {
             </Animated.View>
           </Pressable>
 
-          {/* Flash toggle */}
-          <Pressable style={d.sideBtn}>
-            <Ionicons name="flash-outline" size={24} color={C.white} />
+          {/* Lifeline button */}
+          <Pressable style={d.sideBtn} onPress={() => {
+            if (pendingProofs.length === 0 && myPools.length === 0) {
+              Alert.alert('No Pools', 'Join a pool first to use lifelines.');
+            } else {
+              setShowLifeline(true);
+            }
+          }}>
+            <Ionicons name="heart" size={24} color="#FF6B6B" />
           </Pressable>
         </View>
       )}
+
+      {/* ── Lifeline Modal ── */}
+      <Modal visible={showLifeline} transparent animationType="slide" onRequestClose={() => setShowLifeline(false)}>
+        <Pressable style={d.sheetOverlay} onPress={() => setShowLifeline(false)} />
+        <View style={d.lifelineSheet}>
+          <View style={d.sheetHandle} />
+          <View style={d.lifelineHeader}>
+            <LinearGradient colors={['#FF6B6B', '#EE5A24']} style={d.lifelineIconWrap}>
+              <Ionicons name="heart" size={24} color={C.white} />
+            </LinearGradient>
+            <View>
+              <Text style={d.lifelineTitle}>Lifelines</Text>
+              <Text style={d.lifelineSub}>Skip a day without breaking your streak</Text>
+            </View>
+          </View>
+
+          <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+            {/* How it works */}
+            <View style={d.lifelineInfo}>
+              <View style={d.lifelineInfoRow}>
+                <Text style={d.lifelineInfoIcon}>💰</Text>
+                <Text style={d.lifelineInfoText}>Buy for 0.5 SOL — instant skip</Text>
+              </View>
+              <View style={d.lifelineInfoRow}>
+                <Text style={d.lifelineInfoIcon}>🤝</Text>
+                <Text style={d.lifelineInfoText}>Ask a friend to vouch — free skip</Text>
+              </View>
+              <View style={d.lifelineInfoRow}>
+                <Text style={d.lifelineInfoIcon}>⚡</Text>
+                <Text style={d.lifelineInfoText}>Max 3 lifelines per pool</Text>
+              </View>
+            </View>
+
+            {/* Pool lifeline options */}
+            <Text style={d.lifelineSectionLabel}>YOUR POOLS</Text>
+            {pendingProofs.length === 0 ? (
+              <View style={d.lifelineEmpty}>
+                <Text style={d.lifelineEmptyText}>All proofs submitted today!</Text>
+              </View>
+            ) : (
+              pendingProofs.map((proof) => (
+                <View key={proof.pool_id} style={d.lifelinePoolCard}>
+                  <View style={d.lifelinePoolHeader}>
+                    <Text style={d.lifelinePoolEmoji}>{proof.pool_emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={d.lifelinePoolName}>{proof.pool_name}</Text>
+                      <Text style={d.lifelinePoolDeadline}>{proof.deadline}</Text>
+                    </View>
+                  </View>
+                  <View style={d.lifelineActions}>
+                    <Pressable
+                      style={d.lifelineBuyBtn}
+                      disabled={lifelineLoading}
+                      onPress={async () => {
+                        if (!user) return;
+                        setLifelineLoading(true);
+                        try {
+                          const res = await purchaseLifeline(user.id, proof.pool_id);
+                          if (!res.success) {
+                            Alert.alert('Cannot Purchase', res.error || 'Try again.');
+                          } else {
+                            // Use it immediately
+                            await activateLifeline(user.id, proof.pool_id, proof.member_id);
+                            refetchProofs();
+                            Alert.alert('Lifeline Used! ❤️', 'Today is covered. Your streak is safe!');
+                            setShowLifeline(false);
+                          }
+                        } finally {
+                          setLifelineLoading(false);
+                        }
+                      }}
+                    >
+                      <LinearGradient colors={['#FF6B6B', '#EE5A24']} style={d.lifelineBuyGrad}>
+                        <Ionicons name="heart" size={14} color={C.white} />
+                        <Text style={d.lifelineBuyText}>0.5 SOL</Text>
+                      </LinearGradient>
+                    </Pressable>
+                    {friendIds.length > 0 && (
+                      <Pressable
+                        style={d.lifelineFriendBtn}
+                        disabled={lifelineLoading}
+                        onPress={async () => {
+                          if (!user) return;
+                          setLifelineLoading(true);
+                          try {
+                            const friendId = friendIds[0];
+                            const res = await requestFriendVouch(user.id, proof.pool_id, friendId, 'Friend');
+                            if (!res.success) {
+                              Alert.alert('Cannot Vouch', res.error || 'Try again.');
+                            } else {
+                              await activateLifeline(user.id, proof.pool_id, proof.member_id);
+                              refetchProofs();
+                              Alert.alert('Friend Vouched! 🤝', 'Your friend saved your streak!');
+                              setShowLifeline(false);
+                            }
+                          } finally {
+                            setLifelineLoading(false);
+                          }
+                        }}
+                      >
+                        <Ionicons name="people" size={14} color={C.primary} />
+                        <Text style={d.lifelineFriendText}>Ask Friend</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -659,5 +782,148 @@ const d = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: C.white,
+  },
+
+  // Lifeline modal
+  lifelineSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: C.bgSurface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  lifelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  lifelineIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lifelineTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.textPrimary,
+  },
+  lifelineSub: {
+    fontSize: 13,
+    color: C.textSecondary,
+    marginTop: 2,
+  },
+  lifelineInfo: {
+    backgroundColor: 'rgba(255,107,107,0.06)',
+    borderRadius: Radius.md,
+    padding: 14,
+    gap: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,107,107,0.12)',
+  },
+  lifelineInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  lifelineInfoIcon: {
+    fontSize: 16,
+    width: 24,
+    textAlign: 'center',
+  },
+  lifelineInfoText: {
+    fontSize: 13,
+    color: C.textSecondary,
+    flex: 1,
+  },
+  lifelineSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.textMuted,
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  lifelineEmpty: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  lifelineEmptyText: {
+    fontSize: 14,
+    color: C.textMuted,
+  },
+  lifelinePoolCard: {
+    backgroundColor: C.bgElevated,
+    borderRadius: Radius.md,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  lifelinePoolHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  lifelinePoolEmoji: {
+    fontSize: 24,
+  },
+  lifelinePoolName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.textPrimary,
+  },
+  lifelinePoolDeadline: {
+    fontSize: 12,
+    color: C.textMuted,
+    marginTop: 2,
+  },
+  lifelineActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  lifelineBuyBtn: {
+    flex: 1,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  lifelineBuyGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+  },
+  lifelineBuyText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.white,
+  },
+  lifelineFriendBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.2)',
+  },
+  lifelineFriendText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.primary,
   },
 });

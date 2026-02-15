@@ -173,7 +173,7 @@ export async function requestFriendVouch(
 /**
  * Use a lifeline to skip a day without breaking streak
  */
-export async function useLifeline(
+export async function activateLifeline(
   userId: string,
   poolId: string,
   memberId: string,
