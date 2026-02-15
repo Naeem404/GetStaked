@@ -48,43 +48,39 @@ Deno.serve(async (req: Request) => {
           throw new Error(`Failed to fetch image: ${imageResponse.status}`);
         }
         const imageBuffer = await imageResponse.arrayBuffer();
-        const base64Image = btoa(
-          String.fromCharCode(...new Uint8Array(imageBuffer))
-        );
+        // Chunked base64 encoding to avoid stack overflow on large images
+        const bytes = new Uint8Array(imageBuffer);
+        let binary = "";
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+        }
+        const base64Image = btoa(binary);
         const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
 
         // Call Gemini 2.0 Flash with vision
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-        const prompt = `You are a strict proof verification AI for an accountability app called GetStaked.
-Users stake money on daily habit goals, and must submit photo proof to keep their streak.
+        const prompt = `You are a strict but fair habit verification AI for the app "Get Staked."
 
-POOL: "${pool_name || 'Unknown Pool'}"
-TASK DESCRIPTION: "${proof_description || 'Complete the required activity'}"
+The user claims to have completed this habit: "${pool_name || 'Unknown'}"
+Their proof description requirement is: "${proof_description || 'Complete the required activity'}"
 
-Your job: Determine if this photo genuinely proves the user completed the task described above.
+Analyze this photo and determine:
+1. Does this photo show evidence of the claimed habit being completed?
+2. Is this a real, freshly taken photo (not a screenshot of an old photo, not a stock image)?
+3. Confidence score from 0-100
 
-Evaluation criteria (check each carefully):
-1. TASK MATCH: Does the image content directly relate to the task description? For example:
-   - "Go to the gym" → photo should show gym equipment, gym interior, workout in progress
-   - "Read for 30 minutes" → photo should show a book being read, reading app, etc.
-   - "Drink 8 glasses of water" → photo should show water bottle, glass of water, tracking app
-   - "Run 5km" → photo should show running app with distance, outdoor running scene
-2. AUTHENTICITY: Is this a real photo taken by the user (not a screenshot of Google Images, not AI-generated, not someone else's photo)?
-3. RECENCY: Does the photo appear to be taken recently (not an old photo being resubmitted)?
-
-Scoring:
-- 0.8-1.0 = Clearly matches the task, looks genuine
-- 0.5-0.7 = Somewhat related but unclear or could be faked — UNCERTAIN
-- 0.0-0.4 = Does not match the task or is clearly fake
-
-Respond in JSON format ONLY (no markdown, no backticks):
+Respond in JSON format ONLY:
 {
-  "approved": true/false,
-  "confidence": 0.0-1.0,
-  "reasoning": "Brief explanation of why this does or doesn't match the task",
-  "flags": ["list of any concerns, e.g. 'appears to be a screenshot', 'unrelated to task'"]
-}`;
+  "verified": true/false,
+  "confidence": 0-100,
+  "reasoning": "brief explanation",
+  "flags": ["list of any suspicious elements"]
+}
+
+Be strict but reasonable. If the photo shows the person at a gym with equipment visible,
+that counts for a gym habit. Don't require perfection, but do require clear evidence.`;
 
         const geminiResponse = await fetch(geminiUrl, {
           method: "POST",
@@ -120,7 +116,9 @@ Respond in JSON format ONLY (no markdown, no backticks):
           const jsonMatch = text.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const result = JSON.parse(jsonMatch[0]);
-            confidence = Math.min(1, Math.max(0, result.confidence || 0.5));
+            const rawConf = result.confidence ?? 50;
+            // Normalize: if Gemini returned 0-100, convert to 0-1
+            confidence = rawConf > 1 ? Math.min(1, Math.max(0, rawConf / 100)) : Math.min(1, Math.max(0, rawConf));
             reasoning = result.reasoning || "AI analysis complete.";
             if (result.flags?.length) {
               flags.push(...result.flags);

@@ -7,11 +7,11 @@ const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// ElevenLabs voice IDs for each persona
+// ElevenLabs voice IDs for each persona (per spec)
 const VOICE_MAP: Record<string, string> = {
-  drill_sergeant: "pNInz6obpgDQGcFmaJgB", // Adam — strong/commanding
-  hype_beast: "EXAVITQu4vr4xnSDxMaL",     // Bella — energetic
-  gentle_guide: "21m00Tcm4TlvDq8ikWAM",    // Rachel — calm/soothing
+  drill_sergeant: "TxGEqnHWrfWFTfGW9XjX", // Josh — deep male, commanding
+  hype_beast: "pNInz6obpgDQGcFmaJgB",     // Adam — energetic male
+  gentle_guide: "21m00Tcm4TlvDq8ikWAM",   // Rachel — warm female, calm
 };
 
 const PERSONA_PROMPTS: Record<string, string> = {
@@ -21,14 +21,15 @@ const PERSONA_PROMPTS: Record<string, string> = {
 };
 
 const TRIGGER_CONTEXT: Record<string, string> = {
-  morning_reminder: "The user hasn't submitted their proof yet today. Remind them.",
-  streak_broken: "The user just broke their streak. They missed a day.",
-  proof_verified: "The user just had their proof approved! Celebrate with them.",
-  proof_rejected: "The user's proof was rejected. Encourage them to try again.",
-  pool_won: "The user just won a pool challenge! They get their stake back plus winnings.",
-  pool_joined: "The user just joined a new stake pool. Hype them up for the challenge.",
-  milestone_streak: "The user hit a streak milestone. Congratulate them.",
-  idle_reminder: "The user hasn't opened the app in a while. Welcome them back.",
+  morning_reminder: "The user hasn't submitted their proof yet today. It's getting late. Remind them their money is on the line.",
+  streak_broken: "The user just broke their streak and lost their staked SOL. Their money is gone. Acknowledge the loss but push them to join another pool and finish what they started.",
+  proof_verified: "The user just had their proof approved! Their streak continues. Mention how many people have already dropped out and their money is looking real good right now.",
+  proof_rejected: "The user's proof was rejected by AI. Encourage them to retake the photo with clearer evidence.",
+  pool_won: "The user completed the full pool challenge! They won and earned back their stake plus winnings from people who dropped out. Celebrate big.",
+  pool_joined: "The user just joined a new stake pool and put real money on the line. Mention the number of other players. Let's see who blinks first.",
+  milestone_streak: "The user hit an impressive streak milestone. Their discipline is paying off. Hype them up.",
+  idle_reminder: "The user hasn't opened the app in a while. Their streak is at risk. It's 6 PM and no proof yet. They have limited hours. Don't let the SOL walk away.",
+  someone_failed: "Someone in the user's pool just failed. Their stake got added to the pot. The user is closer to payday.",
 };
 
 Deno.serve(async (req: Request) => {
@@ -181,34 +182,37 @@ Deno.serve(async (req: Request) => {
 function getDefaultMessage(persona: string, trigger: string): string {
   const defaults: Record<string, Record<string, string>> = {
     drill_sergeant: {
-      morning_reminder: "Rise and shine! Your pool is waiting. Get that proof in NOW — no excuses.",
-      streak_broken: "You broke your streak. That's on you. Now get back up and don't let it happen again.",
-      proof_verified: "Proof accepted. That's what I like to see. Keep that energy going, soldier.",
-      proof_rejected: "Proof rejected. Try again. I know you can do better than that.",
-      pool_won: "VICTORY! You crushed it. Collect your winnings — you earned every lamport.",
-      pool_joined: "New pool, new challenge. I expect nothing less than 100% from you. Let's go.",
-      milestone_streak: "That's a serious streak. You're proving you've got what it takes. Don't stop.",
-      idle_reminder: "Where have you been?! Your habits don't build themselves. Get back in here.",
+      morning_reminder: "Hey. It's getting late and I haven't seen your proof yet. You've got limited hours. Don't let your SOL walk away.",
+      streak_broken: "Streak broken. SOL gone. But you showed discipline for days. Join another pool and finish what you started.",
+      proof_verified: "Proof accepted. You're on fire. 2 people already dropped out — their money is looking real good right now.",
+      proof_rejected: "Proof rejected. Try again with better evidence. I know you can do better than that.",
+      pool_won: "YOU DID IT! That discipline just earned you SOL. Winners get paid.",
+      pool_joined: "Alright, you just staked SOL. Others are in the pool. Let's see who blinks first.",
+      milestone_streak: "That's a serious streak. You're proving you've got what it takes. Don't stop now.",
+      idle_reminder: "Where have you been?! Your streak is at risk. Get back in here NOW.",
+      someone_failed: "One down. Their stake just got added to the pot. You're closer to payday.",
     },
     hype_beast: {
-      morning_reminder: "GOOD MORNING CHAMPION! Time to crush it! Get that proof submitted! 🔥",
+      morning_reminder: "YO CHAMPION! Time is ticking! Get that proof submitted and keep the streak ALIVE! 🔥",
       streak_broken: "Hey, streaks break — but LEGENDS bounce back! Let's get it TODAY! 💪",
-      proof_verified: "YOOO your proof just got VERIFIED! You're absolutely KILLING IT! 🎉",
-      proof_rejected: "No worries fam! Just retake that proof — you got this EASY! 📸",
-      pool_won: "WINNER WINNER! You just WON the pool! SOL incoming! 🏆💰",
-      pool_joined: "LET'S GOOOO! New pool joined! This is YOUR challenge to dominate! ⚡",
+      proof_verified: "YOOO your proof just got VERIFIED! You're absolutely KILLING IT! People are dropping and their money is YOURS! 🎉",
+      proof_rejected: "No worries fam! Just retake that proof with clearer evidence — you got this EASY! 📸",
+      pool_won: "WINNER WINNER! You just WON the pool! SOL incoming! That's what DISCIPLINE looks like! 🏆💰",
+      pool_joined: "LET'S GOOOO! You just put your money where your mouth is! This is YOUR challenge to DOMINATE! ⚡",
       milestone_streak: "STREAK MILESTONE! You're literally UNSTOPPABLE right now! 🔥🔥🔥",
-      idle_reminder: "We MISS you! Come back and keep that energy going! The pools need you! 🙌",
+      idle_reminder: "We MISS you! Your streak is fading! Come back and keep that FIRE going! 🙌",
+      someone_failed: "Someone just DROPPED! Their stake is in the pot now! You're getting CLOSER to that bag! �",
     },
     gentle_guide: {
-      morning_reminder: "Good morning. A new day, a new opportunity. When you're ready, share your proof.",
-      streak_broken: "Streaks come and go, but your commitment endures. Take a breath and begin again.",
-      proof_verified: "Your proof has been accepted. Well done — each step forward matters.",
-      proof_rejected: "This proof didn't pass, but that's okay. Try once more with kindness toward yourself.",
-      pool_won: "Congratulations on completing your challenge. Your dedication has been rewarded.",
-      pool_joined: "You've taken a beautiful step by joining this pool. Trust in your ability.",
+      morning_reminder: "Good morning. A new day, a new opportunity. When you're ready, share your proof. Your consistency matters.",
+      streak_broken: "Streaks come and go, but your commitment endures. Take a breath and begin again with a new pool.",
+      proof_verified: "Your proof has been accepted. Well done — each step forward matters. Keep going at your own pace.",
+      proof_rejected: "This proof didn't quite pass. That's okay. Try once more with clearer evidence. You've got this.",
+      pool_won: "Congratulations on completing your challenge. Your dedication has been rewarded. You earned this.",
+      pool_joined: "You've taken a beautiful step by joining this pool. Trust in your ability to show up every day.",
       milestone_streak: "What a meaningful milestone. Your consistency speaks volumes about your character.",
       idle_reminder: "Welcome back. There's no judgment here — only the next step whenever you're ready.",
+      someone_failed: "Someone in your pool couldn't keep up. Their loss adds to your potential reward. Stay steady.",
     },
   };
 

@@ -55,10 +55,10 @@ export default function PoolsScreen() {
   const [persona, setPersona] = useState<Persona>('drill-sergeant');
   const { message: coachMsg, loading: coachLoading, playing, getCoachMessage, stopAudio } = useCoach();
   const personaMapDB: Record<Persona, CoachPersona> = { 'drill-sergeant': 'drill_sergeant', 'hype-beast': 'hype_beast', 'gentle-guide': 'gentle_guide' };
-  const handleOpenCoach = () => { setShowCoach(true); getCoachMessage('morning_reminder'); };
+  const handleOpenCoach = () => { setShowCoach(true); getCoachMessage('morning_reminder', undefined, personaMapDB[persona]); };
   const handleQuickAction = (action: string) => {
     const triggerMap: Record<string, string> = { 'Motivate Me': 'morning_reminder', 'How Am I Doing?': 'milestone_streak', 'SOS \u2014 Need Help': 'streak_broken' };
-    getCoachMessage((triggerMap[action] || 'morning_reminder') as any);
+    getCoachMessage((triggerMap[action] || 'morning_reminder') as any, undefined, personaMapDB[persona]);
   };
   const cp = personas[persona];
 
@@ -160,6 +160,13 @@ export default function PoolsScreen() {
         refetch();
         refetchMyPools();
         refreshDemoBalance();
+        // Trigger voice coach on pool join
+        const joinedPool = pools.find((p: any) => p.id === poolId);
+        getCoachMessage('pool_joined', {
+          pool_name: joinedPool?.name || 'Pool',
+          stake_amount: stakeAmount,
+          players: joinedPool?.current_players ?? 0,
+        });
       }
     } finally {
       setJoining(null);
@@ -393,7 +400,7 @@ export default function PoolsScreen() {
               <Text style={p.coachMsgText}>{coachMsg || cp.msg}</Text>
             )}
             <View style={p.coachWaveRow}>
-              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder')}>
+              <Pressable onPress={playing ? stopAudio : () => getCoachMessage('morning_reminder', undefined, personaMapDB[persona])}>
                 <Ionicons name={playing ? 'stop' : 'play'} size={16} color={playing ? C.primary : C.textMuted} />
               </Pressable>
               {[12, 18, 8, 22, 14, 10, 20, 16, 12].map((h, i) => (

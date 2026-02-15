@@ -6,6 +6,14 @@ import { decode } from 'base64-arraybuffer';
 
 type Proof = Tables<'proofs'>;
 
+export interface VerificationResult {
+  status: 'approved' | 'rejected' | 'needs_review' | 'unknown';
+  confidence: number;
+  reasoning: string;
+  flags: string[];
+  needs_friend_review?: boolean;
+}
+
 export interface PendingProof {
   pool_id: string;
   member_id: string;
@@ -179,10 +187,11 @@ export async function submitProof(
       .single();
 
     // Try AI verification via Edge Function, fall back to auto-approve
-    await verifyProof(data.id, imageUrl, poolData, userId, memberId, poolId);
+    const verification = await verifyProof(data.id, imageUrl, poolData, userId, memberId, poolId);
+    return { data, error: null, verification };
   }
 
-  return { data, error: null };
+  return { data, error: null, verification: null };
 }
 
 /**
@@ -195,7 +204,7 @@ async function verifyProof(
   userId: string,
   memberId: string,
   poolId: string,
-) {
+): Promise<VerificationResult> {
   try {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
@@ -222,6 +231,15 @@ async function verifyProof(
     if (!verifyResponse.ok) {
       throw new Error(`Verify endpoint returned ${verifyResponse.status}`);
     }
+
+    const result = await verifyResponse.json();
+    return {
+      status: result.status || 'approved',
+      confidence: result.confidence ?? 0.75,
+      reasoning: result.reasoning || 'Verification complete.',
+      flags: result.flags || [],
+      needs_friend_review: result.needs_friend_review || false,
+    };
   } catch (aiErr) {
     console.warn('AI verification unavailable, auto-approving:', aiErr);
     // Fallback: auto-approve via RPC (handles streaks, daily_habits, profile stats)
@@ -257,6 +275,12 @@ async function verifyProof(
         total_proofs_submitted: ((profData as any)?.total_proofs_submitted ?? 0) + 1,
       }).eq('id', userId);
     }
+    return {
+      status: 'approved' as const,
+      confidence: 0.75,
+      reasoning: 'Auto-approved: AI verification service unavailable.',
+      flags: [],
+    };
   }
 }
 

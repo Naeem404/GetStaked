@@ -12,7 +12,8 @@ export type CoachTrigger =
   | 'pool_won'
   | 'pool_joined'
   | 'milestone_streak'
-  | 'idle_reminder';
+  | 'idle_reminder'
+  | 'someone_failed';
 
 interface CoachResponse {
   message: string;
@@ -30,7 +31,8 @@ export function useCoach() {
 
   const getCoachMessage = useCallback(async (
     trigger: CoachTrigger,
-    context?: Record<string, any>
+    context?: Record<string, any>,
+    personaOverride?: CoachPersona,
   ): Promise<CoachResponse | null> => {
     if (!user) return null;
 
@@ -39,7 +41,7 @@ export function useCoach() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
 
-      const persona = (profile?.coach_persona as CoachPersona) || 'drill_sergeant';
+      const persona = personaOverride || (profile?.coach_persona as CoachPersona) || 'drill_sergeant';
 
       const response = await fetch(
         `${SUPABASE_URL}/functions/v1/voice-coach`,

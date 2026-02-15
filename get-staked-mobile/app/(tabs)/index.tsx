@@ -7,7 +7,8 @@ import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { useMyPools } from "@/hooks/use-pools";
 import { useUserStats } from "@/hooks/use-stats";
-import { usePendingProofs, submitProof } from "@/hooks/use-proofs";
+import { usePendingProofs, submitProof, VerificationResult } from "@/hooks/use-proofs";
+import { useCoach } from "@/hooks/use-coach";
 import { purchaseLifeline, activateLifeline, requestFriendVouch } from "@/hooks/use-lifelines";
 import { useFriendIds } from "@/hooks/use-friends";
 import { getDemoBalance } from "@/lib/demo-wallet";
@@ -42,7 +43,10 @@ export default function CameraDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [showLifeline, setShowLifeline] = useState(false);
   const [lifelineLoading, setLifelineLoading] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+  const [showVerification, setShowVerification] = useState(false);
   const friendIds = useFriendIds();
+  const { getCoachMessage } = useCoach();
 
   const totalPot = myPools.reduce((sum, p) => sum + (p.pot_size ?? 0), 0);
   const activeCount = myPools.length;
@@ -265,9 +269,9 @@ export default function CameraDashboard() {
               if (!user || !selectedPoolId || !selectedMemberId || !imageUri) return;
               setSubmitting(true);
               try {
-                const { error } = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri, imageBase64 ?? undefined);
-                if (error) {
-                  Alert.alert('Error', error.message);
+                const result = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri, imageBase64 ?? undefined);
+                if (result.error) {
+                  Alert.alert('Error', result.error.message);
                 } else {
                   setShowPoolSheet(false);
                   setImageUri(null);
@@ -276,7 +280,22 @@ export default function CameraDashboard() {
                   setSelectedMemberId(null);
                   refetchProofs();
                   refetchStats();
-                  Alert.alert('Verified! ✅', 'Your proof has been submitted and verified.');
+
+                  // Show AI verification result
+                  if (result.verification) {
+                    setVerificationResult(result.verification);
+                    setShowVerification(true);
+                    // Trigger voice coach based on result
+                    if (result.verification.status === 'approved') {
+                      getCoachMessage('proof_verified', { confidence: result.verification.confidence });
+                    } else if (result.verification.status === 'rejected') {
+                      getCoachMessage('proof_rejected', { reasoning: result.verification.reasoning });
+                    }
+                  } else {
+                    setVerificationResult({ status: 'approved', confidence: 0.75, reasoning: 'Proof submitted successfully.', flags: [] });
+                    setShowVerification(true);
+                    getCoachMessage('proof_verified');
+                  }
                 }
               } catch (err: any) {
                 Alert.alert('Error', err.message || 'Submission failed');
@@ -334,6 +353,78 @@ export default function CameraDashboard() {
           </Pressable>
         </View>
       )}
+
+      {/* ── AI Verification Result Modal ── */}
+      <Modal visible={showVerification} transparent animationType="fade" onRequestClose={() => setShowVerification(false)}>
+        <Pressable style={d.verifyOverlay} onPress={() => setShowVerification(false)}>
+          <Pressable style={d.verifyCard} onPress={(e) => e.stopPropagation()}>
+            {verificationResult?.status === 'approved' ? (
+              <>
+                <LinearGradient colors={[C.primary, '#4ADE80']} style={d.verifyIconCircle}>
+                  <Ionicons name="checkmark" size={40} color={C.white} />
+                </LinearGradient>
+                <Text style={d.verifyTitle}>Verified! ✅</Text>
+                <Text style={d.verifyConfidence}>
+                  Confidence: {Math.round((verificationResult.confidence ?? 0.75) * 100)}%
+                </Text>
+              </>
+            ) : verificationResult?.status === 'needs_review' ? (
+              <>
+                <View style={[d.verifyIconCircle, { backgroundColor: '#F59E0B' }]}>
+                  <Ionicons name="eye" size={40} color={C.white} />
+                </View>
+                <Text style={[d.verifyTitle, { color: '#F59E0B' }]}>Under Review ⚠️</Text>
+                <Text style={d.verifyConfidence}>
+                  Confidence: {Math.round((verificationResult.confidence ?? 0.5) * 100)}%
+                </Text>
+              </>
+            ) : verificationResult?.status === 'rejected' ? (
+              <>
+                <View style={[d.verifyIconCircle, { backgroundColor: '#EF4444' }]}>
+                  <Ionicons name="close" size={40} color={C.white} />
+                </View>
+                <Text style={[d.verifyTitle, { color: '#EF4444' }]}>Rejected ❌</Text>
+                <Text style={d.verifyConfidence}>
+                  Confidence: {Math.round((verificationResult.confidence ?? 0) * 100)}%
+                </Text>
+              </>
+            ) : null}
+
+            <Text style={d.verifyReasoning}>
+              {verificationResult?.reasoning || 'Verification complete.'}
+            </Text>
+
+            {(verificationResult?.flags?.length ?? 0) > 0 && (
+              <View style={d.verifyFlagsWrap}>
+                {verificationResult!.flags.map((flag, i) => (
+                  <View key={i} style={d.verifyFlagRow}>
+                    <Ionicons name="flag" size={12} color="#F59E0B" />
+                    <Text style={d.verifyFlagText}>{flag}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {verificationResult?.status === 'needs_review' && (
+              <Text style={d.verifyReviewNote}>
+                A pool member will review your proof. You'll be notified of the result.
+              </Text>
+            )}
+
+            {verificationResult?.status === 'rejected' && (
+              <Pressable style={d.verifyRetryBtn} onPress={() => { setShowVerification(false); setVerificationResult(null); }}>
+                <Text style={d.verifyRetryText}>Retake Photo</Text>
+              </Pressable>
+            )}
+
+            <Pressable style={d.verifyDismissBtn} onPress={() => { setShowVerification(false); setVerificationResult(null); }}>
+              <Text style={d.verifyDismissText}>
+                {verificationResult?.status === 'approved' ? 'Continue' : 'Close'}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Lifeline Modal ── */}
       <Modal visible={showLifeline} transparent animationType="slide" onRequestClose={() => setShowLifeline(false)}>
@@ -924,6 +1015,108 @@ const d = StyleSheet.create({
   lifelineFriendText: {
     fontSize: 13,
     fontWeight: '600',
+    color: C.primary,
+  },
+
+  // Verification result modal
+  verifyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  verifyCard: {
+    backgroundColor: C.bgSurface,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  verifyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  verifyTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: C.primary,
+    marginBottom: 4,
+  },
+  verifyConfidence: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.textSecondary,
+    marginBottom: 12,
+  },
+  verifyReasoning: {
+    fontSize: 14,
+    color: C.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  verifyFlagsWrap: {
+    width: '100%',
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    borderRadius: Radius.md,
+    padding: 12,
+    gap: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.15)',
+  },
+  verifyFlagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifyFlagText: {
+    fontSize: 12,
+    color: '#F59E0B',
+    flex: 1,
+  },
+  verifyReviewNote: {
+    fontSize: 13,
+    color: C.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  verifyRetryBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.25)',
+    marginBottom: 8,
+  },
+  verifyRetryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  verifyDismissBtn: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+    backgroundColor: C.primaryDim,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.25)',
+    marginTop: 4,
+  },
+  verifyDismissText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: C.primary,
   },
 });
