@@ -53,3 +53,31 @@ export async function buildStakeTransaction(
 
   return { transaction, connection };
 }
+
+/**
+ * Request free devnet SOL via Solana's built-in airdrop.
+ * Works only on devnet — no reCAPTCHA or external faucet needed.
+ * Max 2 SOL per request (devnet limit).
+ */
+export async function requestDevnetAirdrop(
+  walletAddress: string,
+  solAmount: number = 1,
+): Promise<{ success: boolean; signature?: string; error?: string }> {
+  try {
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const pubkey = new PublicKey(walletAddress);
+    const lamports = Math.round(Math.min(solAmount, 2) * LAMPORTS_PER_SOL);
+
+    const signature = await connection.requestAirdrop(pubkey, lamports);
+
+    // Wait for confirmation
+    await connection.confirmTransaction(signature, 'confirmed');
+
+    return { success: true, signature };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || 'Airdrop failed — devnet may be rate-limited. Try again in a minute.',
+    };
+  }
+}

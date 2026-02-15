@@ -10,7 +10,17 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.getstaked.app"
+      "bundleIdentifier": "com.getstaked.app",
+      "associatedDomains": [
+        "applinks:getstaked.ca",
+        "applinks:get-staked.vercel.app"
+      ],
+      "infoPlist": {
+        "NSCameraUsageDescription": "Get Staked needs camera access to capture daily proof photos for your stake pools.",
+        "NSPhotoLibraryUsageDescription": "Get Staked needs photo library access to select proof images.",
+        "NSMicrophoneUsageDescription": "Get Staked may use the microphone for video proof recording.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +29,26 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.getstaked.app"
+      "package": "com.getstaked.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "getstaked.ca",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "get-staked.vercel.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -38,7 +67,21 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Get Staked needs camera access to capture daily proof photos for your stake pools.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Get Staked needs photo library access to select proof images.",
+          "cameraPermission": "Get Staked needs camera access to capture proof photos."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

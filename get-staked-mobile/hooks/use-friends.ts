@@ -122,6 +122,7 @@ export async function sendFriendRequest(requesterId: string, addresseeId: string
     .from('friendships')
     .select('id, status')
     .or(`and(requester_id.eq.${requesterId},addressee_id.eq.${addresseeId}),and(requester_id.eq.${addresseeId},addressee_id.eq.${requesterId})`)
+    .limit(1)
     .maybeSingle();
 
   if (existing) {
@@ -191,8 +192,31 @@ export async function sendPoolInvites(
 }
 
 /**
- * Get friend IDs (useful for pool invite selection)
+ * Track outbound pending friend requests (requests I sent that haven't been accepted)
  */
+export function useSentRequests() {
+  const { user } = useAuth();
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+
+  const fetchSent = useCallback(async () => {
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('friendships')
+      .select('addressee_id')
+      .eq('requester_id', user.id)
+      .eq('status', 'pending');
+
+    setSentIds(new Set((data || []).map((f: any) => f.addressee_id)));
+  }, [user]);
+
+  useEffect(() => {
+    fetchSent();
+  }, [fetchSent]);
+
+  return { sentIds, refetch: fetchSent };
+}
+
 export function useFriendIds() {
   const { user } = useAuth();
   const [friendIds, setFriendIds] = useState<string[]>([]);

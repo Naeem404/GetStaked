@@ -1,4 +1,3 @@
-import "react-native-get-random-values"; // MUST be first import for Phantom SDK crypto
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
@@ -39,6 +38,7 @@ export default function RootLayout() {
           <Stack.Screen name="wallet" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="pool-detail" />
+          <Stack.Screen name="phantom-auth-callback" options={{ headerShown: false, animation: "none" }} />
           <Stack.Screen name="confirm-email" options={{ presentation: "modal" }} />
           <Stack.Screen name="congratulations" options={{ presentation: "modal", animation: "fade" }} />
         </Stack>

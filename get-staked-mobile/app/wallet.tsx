@@ -8,11 +8,13 @@ import { useModal, useAccounts, useSolana, useDisconnect } from '@phantom/react-
 import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { saveWalletToProfile, removeWalletFromProfile, getWalletBalance, getSolanaAddress } from '@/lib/wallet';
+import { requestDevnetAirdrop } from '@/lib/solana-staking';
 
 export default function WalletScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const [balance, setBalance] = useState<number | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
+  const [airdropping, setAirdropping] = useState(false);
 
   // Phantom SDK hooks
   const modal = useModal();
@@ -58,6 +60,24 @@ export default function WalletScreen() {
       Alert.alert('Error', `Failed to open Phantom: ${err?.message || 'Unknown error'}`);
     }
   }, [modal, isConnected]);
+
+  async function handleAirdrop() {
+    if (!walletAddress) return;
+    setAirdropping(true);
+    try {
+      const result = await requestDevnetAirdrop(walletAddress, 1);
+      if (result.success) {
+        Alert.alert('Airdrop Success', '1 SOL has been added to your devnet wallet!');
+        fetchBalance(walletAddress);
+      } else {
+        Alert.alert('Airdrop Failed', result.error || 'Try again in a minute.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Airdrop request failed');
+    } finally {
+      setAirdropping(false);
+    }
+  }
 
   async function handleDisconnect() {
     if (!user) return;
@@ -124,6 +144,29 @@ export default function WalletScreen() {
                   </Text>
                 )}
               </View>
+              {/* Devnet Airdrop Button */}
+              <Pressable
+                style={s.airdropBtn}
+                onPress={handleAirdrop}
+                disabled={airdropping}
+              >
+                <LinearGradient
+                  colors={['#14F195', '#9945FF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={s.airdropGradient}
+                >
+                  {airdropping ? (
+                    <ActivityIndicator size="small" color={C.white} />
+                  ) : (
+                    <Ionicons name="water" size={18} color={C.white} />
+                  )}
+                  <Text style={s.airdropText}>
+                    {airdropping ? 'Requesting...' : 'Get Free Test SOL'}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+
               <View style={s.connectedActions}>
                 <Pressable style={s.refreshBtn} onPress={() => fetchBalance(walletAddress)}>
                   <Ionicons name="refresh" size={16} color={C.textSecondary} />
@@ -249,6 +292,12 @@ const s = StyleSheet.create({
   },
   balanceLabel: { fontSize: 14, color: C.textMuted },
   balanceValue: { fontSize: 24, fontWeight: '800', color: C.accent },
+  airdropBtn: { marginBottom: 16, borderRadius: Radius.md, overflow: 'hidden' },
+  airdropGradient: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: Radius.md,
+  },
+  airdropText: { fontSize: 15, fontWeight: '700', color: C.white },
   connectedActions: { flexDirection: 'row', gap: 12 },
   refreshBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,

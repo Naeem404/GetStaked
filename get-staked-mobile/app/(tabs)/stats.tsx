@@ -328,6 +328,68 @@ export default function LeaderboardScreen() {
 
 
 
+            {/* ── My Rank Card ── */}
+            {myRank && (
+              <View style={lb.myRankCard}>
+                <View style={lb.myRankLeft}>
+                  <Text style={lb.myRankLabel}>YOUR RANK</Text>
+                  <Text style={lb.myRankNumber}>#{myRank.rank}</Text>
+                </View>
+                <View style={lb.myRankStats}>
+                  <View style={lb.myRankStat}>
+                    <Ionicons name="flame" size={14} color={C.accent} />
+                    <Text style={lb.myRankStatVal}>{myRank.current_streak}</Text>
+                    <Text style={lb.myRankStatLabel}>Streak</Text>
+                  </View>
+                  <View style={lb.myRankStat}>
+                    <Ionicons name="trophy" size={14} color="#FFD700" />
+                    <Text style={lb.myRankStatVal}>{myRank.total_pools_won}</Text>
+                    <Text style={lb.myRankStatLabel}>Wins</Text>
+                  </View>
+                  <View style={lb.myRankStat}>
+                    <Ionicons name="camera" size={14} color={C.primary} />
+                    <Text style={lb.myRankStatVal}>{myRank.total_proofs_submitted}</Text>
+                    <Text style={lb.myRankStatLabel}>Proofs</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* ── Full Ranked List ── */}
+            {leaderboard.length > 0 && (
+              <View style={rk.rankedList}>
+                <Text style={rk.rankedListTitle}>Rankings</Text>
+                {leaderboard.map((entry, idx) => {
+                  const isMe = user && entry.user_id === user.id;
+                  const colors = getAvatarColors(idx);
+                  return (
+                    <View key={entry.user_id} style={[rk.rankedRow, isMe && rk.rankedRowMe]}>
+                      <Text style={[rk.rankedRank, isMe && rk.rankedRankMe]}>
+                        {entry.rank}
+                      </Text>
+                      <LinearGradient colors={colors} style={rk.rankedAvatar}>
+                        <Text style={rk.rankedAvatarText}>
+                          {(entry.display_name || '?')[0]?.toUpperCase() || '?'}
+                        </Text>
+                      </LinearGradient>
+                      <View style={rk.rankedInfo}>
+                        <Text style={[rk.rankedName, isMe && rk.rankedNameMe]} numberOfLines={1}>
+                          {entry.display_name || 'Anonymous'}{isMe ? ' (You)' : ''}
+                        </Text>
+                        <Text style={rk.rankedMeta}>
+                          {entry.current_streak} streak · {entry.total_proofs_submitted} proofs
+                        </Text>
+                      </View>
+                      <View style={rk.rankedStreakBadge}>
+                        <Ionicons name="flame" size={12} color={C.accent} />
+                        <Text style={rk.rankedStreakVal}>{entry.current_streak}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
             {/* ── Pool-based Leaderboard ── */}
 
             {poolsLoading ? (
@@ -1745,6 +1807,136 @@ const lb = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: C.primary,
+  },
+  myRankCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+    backgroundColor: C.bgSurface,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: C.primary,
+  },
+  myRankLeft: {
+    alignItems: 'center',
+    marginRight: Spacing.lg,
+    paddingRight: Spacing.lg,
+    borderRightWidth: 1,
+    borderRightColor: C.border,
+  },
+  myRankLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: C.textMuted,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  myRankNumber: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: C.primary,
+  },
+  myRankStats: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  myRankStat: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  myRankStatVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.textPrimary,
+  },
+  myRankStatLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: C.textMuted,
+  },
+});
+
+const rk = StyleSheet.create({
+  rankedList: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  rankedListTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: C.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  rankedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    marginBottom: 6,
+    backgroundColor: C.bgSurface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    gap: 10,
+  },
+  rankedRowMe: {
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
+  },
+  rankedRank: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: C.textMuted,
+    width: 28,
+    textAlign: 'center',
+  },
+  rankedRankMe: {
+    color: C.primary,
+  },
+  rankedAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankedAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.white,
+  },
+  rankedInfo: {
+    flex: 1,
+  },
+  rankedName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.textPrimary,
+  },
+  rankedNameMe: {
+    color: C.primary,
+    fontWeight: '700',
+  },
+  rankedMeta: {
+    fontSize: 11,
+    color: C.textMuted,
+    marginTop: 1,
+  },
+  rankedStreakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    backgroundColor: C.accentDim,
+  },
+  rankedStreakVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.accent,
   },
 });
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, ScrollView,
   Alert, ActivityIndicator,
@@ -11,21 +11,29 @@ import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import {
   useFriends, useSearchProfiles, sendFriendRequest,
-  acceptFriendRequest, removeFriend, FriendProfile,
+  acceptFriendRequest, removeFriend, useSentRequests, FriendProfile,
 } from '@/hooks/use-friends';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
   const { friends, pendingRequests, loading, refetch } = useFriends();
   const { results, searching, search } = useSearchProfiles();
+  const { sentIds, refetch: refetchSent } = useSentRequests();
   const [searchQuery, setSearchQuery] = useState('');
   const [tab, setTab] = useState<'friends' | 'requests' | 'search'>('friends');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   const handleSearch = useCallback((text: string) => {
     setSearchQuery(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.length >= 2) {
       setTab('search');
-      search(text);
+      debounceRef.current = setTimeout(() => search(text), 350);
     } else if (text.length === 0) {
       setTab('friends');
     }
@@ -38,6 +46,7 @@ export default function FriendsScreen() {
       Alert.alert('Info', (error as any).message || 'Could not send request');
     } else {
       Alert.alert('Sent!', `Friend request sent to ${profile.display_name || 'user'}`);
+      refetchSent();
     }
   }
 
@@ -166,7 +175,7 @@ export default function FriendsScreen() {
                         <Ionicons name="checkmark-circle" size={16} color={C.success} />
                         <Text style={st.statusText}>Friends</Text>
                       </View>
-                    ) : pendingIds.has(profile.id) ? (
+                    ) : pendingIds.has(profile.id) || sentIds.has(profile.id) ? (
                       <View style={[st.statusBadge, { backgroundColor: C.accentDim }]}>
                         <Ionicons name="time" size={16} color={C.warning} />
                         <Text style={[st.statusText, { color: C.warning }]}>Pending</Text>
