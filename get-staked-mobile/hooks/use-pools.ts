@@ -206,6 +206,7 @@ export async function joinPool(
     .insert({
       pool_id: poolId,
       user_id: userId,
+      status: 'active' as any,
       stake_tx_signature: txSignature || null,
     })
     .select()
@@ -304,7 +305,7 @@ export async function createPool(pool: TablesInsert<'pools'>) {
     // Creator auto-joins the pool (trigger handles current_players/pot_size)
     await supabase
       .from('pool_members')
-      .insert({ pool_id: data.id, user_id: pool.creator_id });
+      .insert({ pool_id: data.id, user_id: pool.creator_id, status: 'active' as any });
 
     // Log activity
     await supabase.from('activity_log').insert({
