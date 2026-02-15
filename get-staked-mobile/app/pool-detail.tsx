@@ -10,6 +10,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { C, Spacing, Radius } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 import { usePoolDetail, joinPool } from '@/hooks/use-pools';
+import { useSolana, useAccounts } from '@phantom/react-native-sdk';
+import { buildStakeTransaction } from '@/lib/solana-staking';
 
 const AVATAR_COLORS = [
   ['#FF6B6B', '#EE5A24'], ['#A55EEA', '#8854D0'], ['#45AAF2', '#2D98DA'],
@@ -21,6 +23,8 @@ export default function PoolDetailScreen() {
   const { user } = useAuth();
   const { pool, loading, refetch } = usePoolDetail(id || null);
   const [joining, setJoining] = useState(false);
+  const { solana } = useSolana();
+  const { isConnected: walletConnected } = useAccounts();
 
   const isMember = pool?.my_membership != null;
   const members = (pool?.pool_members || [])
@@ -28,15 +32,60 @@ export default function PoolDetailScreen() {
     .sort((a: any, b: any) => (b.current_streak ?? 0) - (a.current_streak ?? 0));
   const fillPct = pool ? ((pool.current_players ?? 0) / (pool.max_players || 1)) * 100 : 0;
 
-  async function handleJoin() {
+  function handleJoin() {
+    if (!user || !pool) return;
+    const stakeAmt = pool.stake_amount ?? 0;
+    if (stakeAmt > 0) {
+      Alert.alert(
+        'Stake Required',
+        `This pool requires a ${stakeAmt} SOL stake. You'll be prompted to approve the transaction in Phantom.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: `Stake ${stakeAmt} SOL`, onPress: () => executeJoin(stakeAmt) },
+        ]
+      );
+    } else {
+      executeJoin(0);
+    }
+  }
+
+  async function executeJoin(stakeAmt: number) {
     if (!user || !pool) return;
     setJoining(true);
     try {
-      const { error } = await joinPool(pool.id, user.id);
+      let txSignature: string | undefined;
+
+      if (stakeAmt > 0 && walletConnected) {
+        try {
+          const fromAddress = await solana.getPublicKey();
+          if (!fromAddress) throw new Error('Could not get wallet address');
+          const { transaction } = await buildStakeTransaction(fromAddress as string, stakeAmt);
+          const result: any = await solana.signAndSendTransaction(transaction);
+          txSignature = result.hash || result.signature;
+        } catch (txErr: any) {
+          if (txErr?.message?.includes('rejected') || txErr?.message?.includes('cancelled')) {
+            Alert.alert('Cancelled', 'Transaction was cancelled.');
+            return;
+          }
+          Alert.alert('Transaction Failed', txErr?.message || 'Could not complete SOL transfer.');
+          return;
+        }
+      } else if (stakeAmt > 0 && !walletConnected) {
+        Alert.alert('Wallet Required', 'Please connect your Phantom wallet first.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Connect Wallet', onPress: () => router.push('/wallet') },
+        ]);
+        return;
+      }
+
+      const { error } = await joinPool(pool.id, user.id, txSignature);
       if (error) {
         Alert.alert('Error', error.message);
       } else {
-        Alert.alert('Success', "You've joined the pool!");
+        Alert.alert(
+          '\u{1F389} You\'re In!',
+          txSignature ? `Staked ${stakeAmt} SOL successfully!` : "You've joined the pool!"
+        );
         refetch();
       }
     } finally {
@@ -187,7 +236,7 @@ export default function PoolDetailScreen() {
         {isMember ? (
           <Pressable
             style={s.actionBtn}
-            onPress={() => router.push('/(tabs)/prove')}
+            onPress={() => router.push('/(tabs)')}
           >
             <LinearGradient
               colors={[C.primary, '#16A34A']}

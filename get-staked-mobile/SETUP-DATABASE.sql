@@ -9,6 +9,73 @@
 
 
 -- ═══════════════════════════════════════════════════════════════
+-- PART 0: TABLES — create any tables that may not exist yet
+-- ═══════════════════════════════════════════════════════════════
+
+-- Create transaction_type enum if it doesn't exist (used by record_sol_transaction RPC)
+DO $$ BEGIN
+  CREATE TYPE transaction_type AS ENUM ('stake_deposit', 'stake_refund', 'winnings_claim', 'penalty');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS activity_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  pool_id UUID,
+  action TEXT NOT NULL,
+  description TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS daily_habits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  habit_date DATE NOT NULL,
+  proofs_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  pool_id UUID,
+  type TEXT NOT NULL,
+  amount NUMERIC DEFAULT 0,
+  tx_signature TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS friendships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  addressee_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS pool_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pool_id UUID NOT NULL,
+  invited_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  invited_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending',
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS coach_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  persona TEXT DEFAULT 'drill_sergeant',
+  trigger TEXT,
+  message TEXT,
+  has_audio BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
+-- ═══════════════════════════════════════════════════════════════
 -- PART 1: COLUMNS — ensure all tables have required columns
 -- ═══════════════════════════════════════════════════════════════
 

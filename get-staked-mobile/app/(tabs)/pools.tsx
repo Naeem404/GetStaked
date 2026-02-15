@@ -106,13 +106,10 @@ export default function PoolsScreen() {
       if (stakeAmount > 0 && walletConnected) {
         try {
           const fromAddress = await solana.getPublicKey();
-          if (!fromAddress) {
-            Alert.alert("Error", "Could not get wallet address. Please reconnect your wallet.");
-            return;
-          }
-          const { transaction } = await buildStakeTransaction(fromAddress, stakeAmount);
-          const result = await solana.signAndSendTransaction(transaction);
-          txSignature = (result as any).signature ?? (result as any).hash;
+          if (!fromAddress) throw new Error('Could not get wallet address');
+          const { transaction } = await buildStakeTransaction(fromAddress as string, stakeAmount);
+          const result: any = await solana.signAndSendTransaction(transaction);
+          txSignature = result.hash || result.signature;
         } catch (txErr: any) {
           // User rejected or tx failed
           if (txErr?.message?.includes('rejected') || txErr?.message?.includes('cancelled')) {

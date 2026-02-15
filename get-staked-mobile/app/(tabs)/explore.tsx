@@ -1,5 +1,6 @@
-import { View } from 'react-native';
+import { Redirect } from 'expo-router';
 
+// Explore functionality is handled by the Pools tab.
 export default function ExploreScreen() {
-  return <View />;
+  return <Redirect href="/(tabs)/pools" />;
 }

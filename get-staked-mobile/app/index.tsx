@@ -5,7 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { C, Spacing, Radius } from "@/constants/theme";
 import { useAuth } from "@/lib/auth-context";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 const steps = [
   { icon: "shield-checkmark" as const, title: "STAKE", desc: "Join a pool & stake SOL on your habit" },
@@ -13,15 +14,49 @@ const steps = [
   { icon: "trophy" as const, title: "WIN", desc: "Complete the challenge, win the pot" },
 ];
 
-const stats = [
-  { value: "2,847", label: "Active Stakers" },
-  { value: "156", label: "Live Pools" },
-  { value: "89K", label: "SOL Staked" },
-  { value: "94%", label: "Payout Rate" },
-];
+function useLandingStats() {
+  const [stats, setStats] = useState([
+    { value: "--", label: "Active Stakers" },
+    { value: "--", label: "Live Pools" },
+    { value: "--", label: "SOL Staked" },
+    { value: "--", label: "Pools Won" },
+  ]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [membersRes, poolsRes, wonRes] = await Promise.all([
+          supabase.from("pool_members").select("user_id", { count: "exact", head: true }).eq("status", "active"),
+          supabase.from("pools").select("id, pot_size", { count: "exact" }).eq("status", "active"),
+          supabase.from("pools").select("id", { count: "exact", head: true }).eq("status", "completed"),
+        ]);
+
+        const stakers = membersRes.count ?? 0;
+        const livePools = poolsRes.count ?? 0;
+        const totalSol = (poolsRes.data ?? []).reduce((sum: number, p: any) => sum + (p.pot_size ?? 0), 0);
+        const poolsWon = wonRes.count ?? 0;
+
+        const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : n.toString();
+        const fmtSol = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(0)}K` : n.toFixed(1);
+
+        setStats([
+          { value: fmt(stakers), label: "Active Stakers" },
+          { value: fmt(livePools), label: "Live Pools" },
+          { value: fmtSol(totalSol), label: "SOL Staked" },
+          { value: fmt(poolsWon), label: "Pools Won" },
+        ]);
+      } catch {
+        // Keep defaults on error
+      }
+    })();
+  }, []);
+
+  return stats;
+}
 
 export default function LandingPage() {
   const { session, loading } = useAuth();
+  const stats = useLandingStats();
 
   useEffect(() => {
     if (!loading && session) {
