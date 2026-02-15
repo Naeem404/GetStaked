@@ -27,7 +27,7 @@ export function usePools(category?: string) {
         .order('created_at', { ascending: false });
 
       if (category && category !== 'all') {
-        query = query.eq('category', category);
+        query = query.eq('category', category as any);
       }
 
       const { data, error } = await query;
@@ -161,17 +161,57 @@ export function usePoolDetail(poolId: string | null) {
   return { pool, loading, error, refetch: fetchPool };
 }
 
-export async function joinPool(poolId: string, userId: string) {
+/**
+ * Join a pool. The DB trigger `handle_pool_member_join` automatically:
+ *  - increments current_players & pot_size
+ *  - auto-activates pool when >= 2 players
+ *
+ * @param txSignature Optional Solana tx signature if user staked SOL on-chain
+ */
+export async function joinPool(
+  poolId: string,
+  userId: string,
+  txSignature?: string,
+) {
+  // Check pool capacity first
+  const { data: poolCheck } = await supabase
+    .from('pools')
+    .select('current_players, max_players, stake_amount, status')
+    .eq('id', poolId)
+    .single();
+
+  if (poolCheck) {
+    if ((poolCheck.current_players ?? 0) >= poolCheck.max_players) {
+      return { data: null, error: { message: 'Pool is full' } as any };
+    }
+    if (poolCheck.status !== 'waiting' && poolCheck.status !== 'active') {
+      return { data: null, error: { message: 'Pool is no longer accepting players' } as any };
+    }
+  }
+
+  // Check if already a member
+  const { data: existing } = await supabase
+    .from('pool_members')
+    .select('id')
+    .eq('pool_id', poolId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    return { data: null, error: { message: 'Already a member of this pool' } as any };
+  }
+
   const { data, error } = await supabase
     .from('pool_members')
-    .insert({ pool_id: poolId, user_id: userId })
+    .insert({
+      pool_id: poolId,
+      user_id: userId,
+      stake_tx_signature: txSignature || null,
+    })
     .select()
     .single();
 
   if (!error) {
-    // Update profile stats
-    await supabase.rpc('calculate_global_streak', { p_user_id: userId });
-
     // Log activity
     await supabase.from('activity_log').insert({
       user_id: userId,
@@ -180,11 +220,38 @@ export async function joinPool(poolId: string, userId: string) {
       description: 'Joined a stake pool',
     });
 
-    // Update total pools joined
+    // Increment total pools joined on profile
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('total_pools_joined')
+      .eq('id', userId)
+      .single();
     await supabase
       .from('profiles')
-      .update({ total_pools_joined: supabase.rpc as any })
+      .update({ total_pools_joined: (prof?.total_pools_joined ?? 0) + 1 })
       .eq('id', userId);
+
+    // Record Solana transaction if provided
+    if (txSignature && poolCheck) {
+      const { error: txError } = await supabase.rpc('record_sol_transaction', {
+        p_user_id: userId,
+        p_pool_id: poolId,
+        p_type: 'stake_deposit',
+        p_amount: poolCheck.stake_amount,
+        p_tx_signature: txSignature,
+      });
+      if (txError) {
+        // Fallback: insert directly if RPC not available yet
+        await supabase.from('transactions').insert({
+          user_id: userId,
+          pool_id: poolId,
+          type: 'stake_deposit' as any,
+          amount: poolCheck.stake_amount,
+          tx_signature: txSignature,
+          status: 'confirmed',
+        });
+      }
+    }
   }
 
   return { data, error };
@@ -198,7 +265,7 @@ export async function createPool(pool: TablesInsert<'pools'>) {
     .single();
 
   if (data && !error) {
-    // Creator auto-joins the pool
+    // Creator auto-joins the pool (trigger handles current_players/pot_size)
     await supabase
       .from('pool_members')
       .insert({ pool_id: data.id, user_id: pool.creator_id });
@@ -213,4 +280,85 @@ export async function createPool(pool: TablesInsert<'pools'>) {
   }
 
   return { data, error };
+}
+
+/**
+ * Get pending pool invites for the current user
+ */
+export function usePoolInvites() {
+  const { user } = useAuth();
+  const [invites, setInvites] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchInvites = useCallback(async () => {
+    if (!user) {
+      setInvites([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('pool_invites')
+        .select(`
+          id, status, created_at,
+          pools (id, name, emoji, stake_amount, duration_days, category),
+          inviter:profiles!pool_invites_invited_by_fkey (id, display_name, avatar_url)
+        `)
+        .eq('invited_user_id', user.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInvites(data || []);
+    } catch (err) {
+      console.error('Error fetching pool invites:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchInvites();
+  }, [fetchInvites]);
+
+  return { invites, loading, refetch: fetchInvites };
+}
+
+export async function acceptPoolInvite(inviteId: string, userId: string) {
+  // Try RPC first
+  const { error: rpcError } = await supabase.rpc('accept_pool_invite', {
+    p_invite_id: inviteId,
+    p_user_id: userId,
+  });
+
+  if (rpcError) {
+    // Fallback: manual accept
+    const { data: invite } = await supabase
+      .from('pool_invites')
+      .select('pool_id')
+      .eq('id', inviteId)
+      .single();
+
+    if (!invite) return { error: { message: 'Invite not found' } as any };
+
+    await supabase
+      .from('pool_invites')
+      .update({ status: 'accepted', responded_at: new Date().toISOString() })
+      .eq('id', inviteId);
+
+    return joinPool(invite.pool_id, userId);
+  }
+
+  return { error: null };
+}
+
+export async function declinePoolInvite(inviteId: string) {
+  const { error } = await supabase
+    .from('pool_invites')
+    .update({ status: 'declined', responded_at: new Date().toISOString() })
+    .eq('id', inviteId);
+
+  return { error };
 }

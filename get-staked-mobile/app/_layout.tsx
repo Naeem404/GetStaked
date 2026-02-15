@@ -2,13 +2,9 @@ import "react-native-get-random-values"; // MUST be first import for Phantom SDK
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
-import * as Linking from "expo-linking";
 import { AuthProvider } from "@/lib/auth-context";
 import { PhantomProvider, AddressType, darkTheme } from "@phantom/react-native-sdk";
 import { PHANTOM_APP_ID } from "@/lib/wallet";
-
-const redirectUrl = Linking.createURL("phantom-auth-callback");
-console.log("[Phantom] redirectUrl:", redirectUrl);
 
 export default function RootLayout() {
   return (
@@ -19,7 +15,7 @@ export default function RootLayout() {
         scheme: "getstaked",
         addressTypes: [AddressType.solana],
         authOptions: {
-          redirectUrl,
+          redirectUrl: "getstaked://phantom-auth-callback",
         },
       }}
       theme={darkTheme}
@@ -41,6 +37,8 @@ export default function RootLayout() {
           <Stack.Screen name="account" />
           <Stack.Screen name="friends" />
           <Stack.Screen name="wallet" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="pool-detail" />
           <Stack.Screen name="confirm-email" options={{ presentation: "modal" }} />
           <Stack.Screen name="congratulations" options={{ presentation: "modal", animation: "fade" }} />
         </Stack>

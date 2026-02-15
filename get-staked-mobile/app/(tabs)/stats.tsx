@@ -16,6 +16,10 @@ import { useRecentActivity } from "@/hooks/use-proofs";
 
 import { useMyPools } from "@/hooks/use-pools";
 
+import { useGlobalLeaderboard } from "@/hooks/use-leaderboard";
+
+import { useAuth } from "@/lib/auth-context";
+
 import { router } from "expo-router";
 
 import { useState } from "react";
@@ -50,85 +54,6 @@ const AVATAR_COLORS = [
 
 
 
-// Top-3 leaderboard data for podium
-
-const top3Leaderboard = [
-
-  { rank: 1, name: 'Jordyn Kenter', score: 86239, avatar: 'J' },
-
-  { rank: 2, name: 'Anna Bator', score: 84397, avatar: 'A' },
-
-  { rank: 3, name: 'Carl Oliver', score: 83199, avatar: 'C' },
-
-];
-
-
-
-// Fallback mock pools for leaderboard when no real data
-
-const mockPoolsForLeaderboard = [
-
-  {
-
-    id: 'mock-1',
-
-    name: 'Morning Runs',
-
-    stake_amount: 0.1,
-
-    duration_days: 7,
-
-    status: 'active',
-
-    current_players: 5,
-
-    max_players: 8,
-
-    pool_members: [
-
-      { id: '1', current_streak: 4, status: 'active', profiles: { display_name: 'Alex', avatar_url: null } },
-
-      { id: '2', current_streak: 2, status: 'active', profiles: { display_name: 'Sarah', avatar_url: null } },
-
-      { id: '3', current_streak: 3, status: 'active', profiles: { display_name: 'Mike', avatar_url: null } },
-
-      { id: '4', current_streak: 5, status: 'active', profiles: { display_name: 'Priya', avatar_url: null } },
-
-      { id: '5', current_streak: 1, status: 'active', profiles: { display_name: 'Jordan', avatar_url: null } },
-
-    ],
-
-  },
-
-  {
-
-    id: 'mock-2',
-
-    name: 'No Sugar Challenge',
-
-    stake_amount: 0.2,
-
-    duration_days: 14,
-
-    status: 'active',
-
-    current_players: 3,
-
-    max_players: 5,
-
-    pool_members: [
-
-      { id: '6', current_streak: 7, status: 'active', profiles: { display_name: 'Lena', avatar_url: null } },
-
-      { id: '7', current_streak: 3, status: 'active', profiles: { display_name: 'Raj', avatar_url: null } },
-
-      { id: '8', current_streak: 5, status: 'active', profiles: { display_name: 'Tina', avatar_url: null } },
-
-    ],
-
-  },
-
-];
 
 
 
@@ -140,6 +65,8 @@ export default function LeaderboardScreen() {
 
   const [activeTab, setActiveTab] = useState<TabType>('stats');
 
+  const { user } = useAuth();
+
   const { stats, loading: statsLoading } = useUserStats();
 
   const { days: habitDays, loading: gridLoading } = useHabitGrid(91);
@@ -148,13 +75,22 @@ export default function LeaderboardScreen() {
 
   const { pools: myPools, loading: poolsLoading } = useMyPools();
 
-  const displayPools = myPools.length > 0 ? myPools : mockPoolsForLeaderboard;
+  const { entries: leaderboard, myRank, loading: lbLoading } = useGlobalLeaderboard(50);
 
 
 
-  // Podium order: 2nd, 1st, 3rd
+  // Build podium from real leaderboard data: 2nd, 1st, 3rd
 
-  const podiumOrder = [top3Leaderboard[1], top3Leaderboard[0], top3Leaderboard[2]];
+  const top3 = leaderboard.slice(0, 3).map((e, i) => ({
+    rank: i + 1,
+    name: e.display_name || 'Anonymous',
+    score: e.current_streak,
+    avatar: (e.display_name || '?')[0]?.toUpperCase() || '?',
+  }));
+
+  const podiumOrder = top3.length >= 3
+    ? [top3[1], top3[0], top3[2]]
+    : top3;
 
 
 
@@ -246,8 +182,25 @@ export default function LeaderboardScreen() {
 
           <>
 
+            {lbLoading ? (
+              <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
+            ) : leaderboard.length === 0 ? (
+              <View style={lb.emptyLeaderboard}>
+                <Ionicons name="trophy-outline" size={48} color={C.textMuted} />
+                <Text style={lb.emptyLeaderTitle}>No Rankings Yet</Text>
+                <Text style={lb.emptyLeaderSub}>
+                  Join a pool and submit proofs to climb the leaderboard!
+                </Text>
+                <Pressable style={lb.emptyLeaderBtn} onPress={() => router.push('/(tabs)/pools')}>
+                  <Text style={lb.emptyLeaderBtnText}>Browse Pools</Text>
+                </Pressable>
+              </View>
+            ) : (
+            <>
+
             {/* ── Top 3 Podium ── */}
 
+            {podiumOrder.length >= 3 && (
             <LinearGradient
 
               colors={['#1A1035', '#0D0B1A', '#0A0A0A']}
@@ -371,6 +324,7 @@ export default function LeaderboardScreen() {
               </View>
 
             </LinearGradient>
+            )}
 
 
 
@@ -380,11 +334,11 @@ export default function LeaderboardScreen() {
 
               <ActivityIndicator color={C.primary} style={{ marginVertical: 40 }} />
 
-            ) : (
+            ) : myPools.length > 0 ? (
 
               <View style={st.poolLeaderboardList}>
 
-                {displayPools.map((pool: any, poolIdx: number) => {
+                {myPools.map((pool: any, poolIdx: number) => {
 
                   const members = (pool.pool_members || [])
 
@@ -540,6 +494,9 @@ export default function LeaderboardScreen() {
 
               </View>
 
+            ) : null}
+
+          </>
             )}
 
           </>
@@ -1756,7 +1713,38 @@ const st = StyleSheet.create({
 
   },
 
+});
 
-
+const lb = StyleSheet.create({
+  emptyLeaderboard: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: Spacing.xl,
+    gap: 10,
+  },
+  emptyLeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.textPrimary,
+  },
+  emptyLeaderSub: {
+    fontSize: 14,
+    color: C.textMuted,
+    textAlign: 'center',
+  },
+  emptyLeaderBtn: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: C.primaryLight,
+    borderWidth: 1,
+    borderColor: C.primary,
+  },
+  emptyLeaderBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.primary,
+  },
 });
 

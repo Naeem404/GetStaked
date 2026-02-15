@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, Dimensions, Image, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Dimensions, Image, Platform, Alert, ActivityIndicator, Modal, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
 import { useMyPools } from "@/hooks/use-pools";
 import { useUserStats } from "@/hooks/use-stats";
+import { usePendingProofs, submitProof } from "@/hooks/use-proofs";
 import { useState, useEffect, useRef } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Animated, {
@@ -22,7 +23,7 @@ import Animated, {
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 export default function CameraDashboard() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { pools: myPools, loading: poolsLoading } = useMyPools();
   const { stats, loading: statsLoading } = useUserStats();
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -30,6 +31,11 @@ export default function CameraDashboard() {
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const { pendingProofs } = usePendingProofs();
+  const [showPoolSheet, setShowPoolSheet] = useState(false);
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const totalPot = myPools.reduce((sum, p) => sum + (p.pot_size ?? 0), 0);
   const activeCount = myPools.length;
@@ -171,15 +177,103 @@ export default function CameraDashboard() {
       )}
 
       {/* Captured image overlay controls */}
-      {imageUri && (
+      {imageUri && !showPoolSheet && (
         <View style={d.previewOverlay}>
           <Ionicons name="checkmark-circle" size={64} color={C.primary} />
           <Text style={d.previewText}>Photo captured</Text>
-          <Pressable onPress={() => setImageUri(null)} style={d.retakeBtn}>
-            <Text style={d.retakeText}>Retake</Text>
-          </Pressable>
+          <View style={d.previewActions}>
+            <Pressable onPress={() => setImageUri(null)} style={d.retakeBtn}>
+              <Text style={d.retakeText}>Retake</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (pendingProofs.length === 0) {
+                  Alert.alert('No Pools', 'You have no active pools that need proof today.');
+                  return;
+                }
+                setShowPoolSheet(true);
+              }}
+              style={d.submitPhotoBtn}
+            >
+              <LinearGradient colors={[C.primary, '#4ADE80']} style={d.submitPhotoBtnGrad}>
+                <Ionicons name="send" size={18} color={C.white} />
+                <Text style={d.submitPhotoBtnText}>Submit Proof</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
         </View>
       )}
+
+      {/* Pool Selection Sheet */}
+      <Modal visible={showPoolSheet} transparent animationType="slide" onRequestClose={() => setShowPoolSheet(false)}>
+        <Pressable style={d.sheetOverlay} onPress={() => setShowPoolSheet(false)} />
+        <View style={d.sheet}>
+          <View style={d.sheetHandle} />
+          <Text style={d.sheetTitle}>Select Pool</Text>
+          <Text style={d.sheetSub}>Which pool is this proof for?</Text>
+          <ScrollView style={d.sheetScroll} showsVerticalScrollIndicator={false}>
+            {pendingProofs.map((proof) => (
+              <Pressable
+                key={proof.pool_id}
+                onPress={() => {
+                  setSelectedPoolId(proof.pool_id);
+                  setSelectedMemberId(proof.member_id);
+                }}
+                style={[
+                  d.poolOption,
+                  selectedPoolId === proof.pool_id && d.poolOptionSelected,
+                ]}
+              >
+                <Text style={d.poolEmoji}>{proof.pool_emoji}</Text>
+                <View style={d.poolOptionInfo}>
+                  <Text style={d.poolOptionName}>{proof.pool_name}</Text>
+                  <Text style={d.poolOptionDeadline}>{proof.deadline}</Text>
+                </View>
+                {selectedPoolId === proof.pool_id ? (
+                  <Ionicons name="checkmark-circle" size={24} color={C.primary} />
+                ) : (
+                  <Ionicons name="ellipse-outline" size={24} color={C.textMuted} />
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Pressable
+            style={[d.sheetSubmitBtn, (!selectedPoolId || submitting) && { opacity: 0.4 }]}
+            disabled={!selectedPoolId || submitting}
+            onPress={async () => {
+              if (!user || !selectedPoolId || !selectedMemberId || !imageUri) return;
+              setSubmitting(true);
+              try {
+                const { error } = await submitProof(selectedPoolId, user.id, selectedMemberId, imageUri);
+                if (error) {
+                  Alert.alert('Error', error.message);
+                } else {
+                  setShowPoolSheet(false);
+                  setImageUri(null);
+                  setSelectedPoolId(null);
+                  setSelectedMemberId(null);
+                  Alert.alert('Verified! ✅', 'Your proof has been submitted and verified.');
+                }
+              } catch (err: any) {
+                Alert.alert('Error', err.message || 'Submission failed');
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            <LinearGradient colors={[C.primary, '#16A34A']} style={d.sheetSubmitGrad}>
+              {submitting ? (
+                <ActivityIndicator color={C.white} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="shield-checkmark" size={20} color={C.white} />
+                  <Text style={d.sheetSubmitText}>Submit & Verify</Text>
+                </>
+              )}
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </Modal>
 
       {/* Bottom capture area — single button + flip */}
       {!imageUri && (
@@ -438,4 +532,114 @@ const d = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
+  // Preview actions
+  previewActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  submitPhotoBtn: {
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+  },
+  submitPhotoBtnGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+  },
+  submitPhotoBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.white,
+  },
+
+  // Pool selection sheet
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    backgroundColor: C.bgSurface,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 40,
+    maxHeight: '65%',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.bgHover,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: C.textPrimary,
+    marginBottom: 4,
+  },
+  sheetSub: {
+    fontSize: 13,
+    color: C.textMuted,
+    marginBottom: Spacing.lg,
+  },
+  sheetScroll: {
+    maxHeight: 240,
+    marginBottom: Spacing.lg,
+  },
+  poolOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: Spacing.md,
+    backgroundColor: C.bgElevated,
+    borderRadius: Radius.md,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  poolOptionSelected: {
+    borderColor: C.primary,
+    backgroundColor: C.primaryLight,
+  },
+  poolEmoji: {
+    fontSize: 24,
+  },
+  poolOptionInfo: {
+    flex: 1,
+  },
+  poolOptionName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.textPrimary,
+  },
+  poolOptionDeadline: {
+    fontSize: 12,
+    color: C.textMuted,
+    marginTop: 2,
+  },
+  sheetSubmitBtn: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  sheetSubmitGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: Radius.md,
+  },
+  sheetSubmitText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.white,
+  },
 });

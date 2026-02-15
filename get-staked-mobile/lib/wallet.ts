@@ -98,3 +98,77 @@ export function getSolanaAddress(
   const solAddr = addresses.find((a) => a.addressType === 'solana');
   return solAddr?.address ?? null;
 }
+
+/**
+ * Record a Solana transaction in the database.
+ * Called after an on-chain transaction is confirmed.
+ */
+export async function recordSolTransaction(
+  userId: string,
+  poolId: string,
+  type: 'stake_deposit' | 'stake_refund' | 'winnings_claim' | 'penalty',
+  amount: number,
+  txSignature: string,
+): Promise<{ txId: string | null; error: any }> {
+  // Try the RPC function first
+  const { data, error } = await supabase.rpc('record_sol_transaction', {
+    p_user_id: userId,
+    p_pool_id: poolId,
+    p_type: type,
+    p_amount: amount,
+    p_tx_signature: txSignature,
+  });
+
+  if (error) {
+    // Fallback: direct insert
+    const { data: fallback, error: fbError } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: userId,
+        pool_id: poolId,
+        type: type as any,
+        amount,
+        tx_signature: txSignature,
+        status: 'confirmed',
+      })
+      .select('id')
+      .single();
+
+    return { txId: fallback?.id || null, error: fbError };
+  }
+
+  return { txId: data as string | null, error: null };
+}
+
+/**
+ * Get transaction history for a user
+ */
+export async function getTransactionHistory(userId: string, limit = 20) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id, type, amount, tx_signature, status, created_at,
+      pools (id, name, emoji)
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  return { data: data || [], error };
+}
+
+/**
+ * Check if a user has staked for a specific pool
+ */
+export async function hasStakedForPool(userId: string, poolId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('pool_id', poolId)
+    .eq('type', 'stake_deposit' as any)
+    .eq('status', 'confirmed')
+    .maybeSingle();
+
+  return !!data;
+}

@@ -134,19 +134,6 @@ export async function submitProof(
     .single();
 
   if (!error && data) {
-    // Update profile stats
-    await supabase
-      .from('profiles')
-      .update({
-        total_proofs_submitted: (await supabase
-          .from('profiles')
-          .select('total_proofs_submitted')
-          .eq('id', userId)
-          .single()
-        ).data?.total_proofs_submitted! + 1,
-      })
-      .eq('id', userId);
-
     // Log activity
     await supabase.from('activity_log').insert({
       user_id: userId,
@@ -184,19 +171,27 @@ export async function submitProof(
         }
       );
 
+      if (!verifyResponse.ok) {
+        throw new Error(`Verify endpoint returned ${verifyResponse.status}`);
+      }
+
       const verifyResult = await verifyResponse.json();
-      // Attach AI result to return data
       (data as any).ai_result = verifyResult;
     } catch (aiErr) {
-      console.warn('AI verification failed, falling back to auto-approve:', aiErr);
-      // Fallback: auto-approve if Gemini is not configured
-      await supabase.rpc('process_proof_verification', {
-        p_proof_id: data.id,
-        p_status: 'approved',
-        p_confidence: 0.75,
-        p_reasoning: 'Auto-approved: AI verification service unavailable.',
-        p_flags: JSON.stringify([]),
-      });
+      console.warn('AI verification unavailable, auto-approving:', aiErr);
+      // Fallback: auto-approve via RPC which handles all side effects
+      // (updates pool_members streak, daily_habits, profile stats)
+      try {
+        await supabase.rpc('process_proof_verification', {
+          p_proof_id: data.id,
+          p_status: 'approved',
+          p_confidence: 0.75,
+          p_reasoning: 'Auto-approved: AI verification service unavailable.',
+          p_flags: JSON.stringify([]),
+        });
+      } catch (rpcErr) {
+        console.warn('RPC fallback also failed:', rpcErr);
+      }
     }
   }
 
